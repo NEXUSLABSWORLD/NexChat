@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Bell,
   CheckCheck,
@@ -18,6 +18,17 @@ import {
   UserRound,
   Wifi,
 } from 'lucide-react'
+import { login as apiLogin, logout as apiLogout, register as apiRegister } from './api/auth'
+import {
+  searchUsers as apiSearchUsers,
+  updateProfile as apiUpdateProfile,
+} from './api/profile'
+import {
+  clearSession,
+  getStoredToken,
+  getStoredUser,
+  storeSession,
+} from './api/client'
 import './App.css'
 
 const languages = [
@@ -123,17 +134,54 @@ const checklist = [
   'Presence, typing et etats de lecture',
 ]
 
+const emptyAuthForm = {
+  username: '',
+  email: '',
+  password: '',
+  password_confirmation: '',
+  primary_language_code: 'fr',
+}
+
+function extractErrorMessage(error, fallback) {
+  const data = error?.response?.data
+  if (data?.errors) {
+    const firstField = Object.values(data.errors)[0]
+    if (Array.isArray(firstField) && firstField.length > 0) {
+      return firstField[0]
+    }
+  }
+  return data?.message || error?.message || fallback
+}
+
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const storedUser = getStoredUser()
+  const storedToken = getStoredToken()
+  const [isAuthenticated, setIsAuthenticated] = useState(Boolean(storedUser && storedToken))
   const [authMode, setAuthMode] = useState('login')
   const [theme, setTheme] = useState('light')
-  const [profile, setProfile] = useState({
-    username: 'Sam Frontend',
-    email: 'sam.frontend@example.com',
-    primary_language_code: 'fr',
+  const [authForm, setAuthForm] = useState({
+    ...emptyAuthForm,
+    ...(storedUser
+      ? {
+          username: storedUser.username || '',
+          email: storedUser.email || '',
+          primary_language_code: storedUser.primary_language_code || 'fr',
+        }
+      : {}),
   })
+  const [profile, setProfile] = useState(
+    storedUser || {
+      id: null,
+      username: 'Sam Frontend',
+      email: 'sam.frontend@example.com',
+      primary_language_code: 'fr',
+    },
+  )
+  const [authError, setAuthError] = useState('')
+  const [authLoading, setAuthLoading] = useState(false)
   const [activeConversationId, setActiveConversationId] = useState(conversations[0].id)
   const [query, setQuery] = useState('')
+  const [remoteResults, setRemoteResults] = useState([])
   const [draft, setDraft] = useState('')
   const [showOriginal, setShowOriginal] = useState(true)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
@@ -157,9 +205,101 @@ function App() {
     )
   }, [query])
 
-  const handleAuthSubmit = (event) => {
+  // Recherche distante (GET /api/profile/search) — declenche apres 2 caracteres.
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const trimmed = query.trim()
+    const timeout = setTimeout(async () => {
+      if (trimmed.length < 2) {
+        setRemoteResults([])
+        return
+      }
+      try {
+        const data = await apiSearchUsers(trimmed)
+        setRemoteResults(data?.users || [])
+      } catch {
+        setRemoteResults([])
+      }
+    }, 300)
+
+    return () => clearTimeout(timeout)
+  }, [query, isAuthenticated])
+
+  const handleAuthChange = (field) => (event) => {
+    setAuthForm((current) => ({ ...current, [field]: event.target.value }))
+  }
+
+  const handleAuthSubmit = async (event) => {
     event.preventDefault()
-    setIsAuthenticated(true)
+    setAuthError('')
+    setAuthLoading(true)
+
+    try {
+      if (authMode === 'register') {
+        await apiRegister({
+          username: authForm.username,
+          email: authForm.email,
+          password: authForm.password,
+          password_confirmation: authForm.password_confirmation,
+          primary_language_code: authForm.primary_language_code,
+        })
+      }
+
+      const { user, token } = await apiLogin({
+        email: authForm.email,
+        password: authForm.password,
+      })
+
+      storeSession({ token, user })
+      setProfile(user)
+      setIsAuthenticated(true)
+      setAuthForm((current) => ({ ...current, password: '', password_confirmation: '' }))
+    } catch (error) {
+      setAuthError(
+        extractErrorMessage(
+          error,
+          authMode === 'register' ? 'Inscription impossible.' : 'Connexion impossible.',
+        ),
+      )
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      if (profile?.id) {
+        await apiLogout({ user_id: profile.id })
+      }
+    } catch {
+      // On force la deconnexion cote client meme si l API echoue.
+    } finally {
+      clearSession()
+      setIsAuthenticated(false)
+      setProfile((current) => ({ ...current, id: null }))
+      setAuthForm(emptyAuthForm)
+    }
+  }
+
+  const handleLanguageChange = async (event) => {
+    const nextLanguage = event.target.value
+    const previous = profile.primary_language_code
+    setProfile((current) => ({ ...current, primary_language_code: nextLanguage }))
+
+    if (!profile?.id) return
+
+    try {
+      const data = await apiUpdateProfile(profile.id, {
+        primary_language_code: nextLanguage,
+      })
+      if (data?.user) {
+        setProfile(data.user)
+        storeSession({ user: data.user })
+      }
+    } catch {
+      setProfile((current) => ({ ...current, primary_language_code: previous }))
+    }
   }
 
   const handleSendMessage = (event) => {
@@ -204,14 +344,20 @@ function App() {
             <button
               className={authMode === 'login' ? 'active' : ''}
               type="button"
-              onClick={() => setAuthMode('login')}
+              onClick={() => {
+                setAuthMode('login')
+                setAuthError('')
+              }}
             >
               Connexion
             </button>
             <button
               className={authMode === 'register' ? 'active' : ''}
               type="button"
-              onClick={() => setAuthMode('register')}
+              onClick={() => {
+                setAuthMode('register')
+                setAuthError('')
+              }}
             >
               Inscription
             </button>
@@ -224,10 +370,8 @@ function App() {
                 <span>
                   <UserRound size={18} />
                   <input
-                    value={profile.username}
-                    onChange={(event) =>
-                      setProfile({ ...profile, username: event.target.value })
-                    }
+                    value={authForm.username}
+                    onChange={handleAuthChange('username')}
                     placeholder="sam.frontend"
                     required
                   />
@@ -241,8 +385,8 @@ function App() {
                 <UserRound size={18} />
                 <input
                   type="email"
-                  value={profile.email}
-                  onChange={(event) => setProfile({ ...profile, email: event.target.value })}
+                  value={authForm.email}
+                  onChange={handleAuthChange('email')}
                   placeholder="toi@example.com"
                   required
                 />
@@ -253,34 +397,68 @@ function App() {
               Mot de passe
               <span>
                 <Lock size={18} />
-                <input type="password" placeholder="••••••••" required />
-              </span>
-            </label>
-
-            <label>
-              Langue principale
-              <span>
-                <Globe2 size={18} />
-                <select
-                  value={profile.primary_language_code}
-                  onChange={(event) =>
-                    setProfile({ ...profile, primary_language_code: event.target.value })
-                  }
+                <input
+                  type="password"
+                  value={authForm.password}
+                  onChange={handleAuthChange('password')}
+                  placeholder="••••••••"
+                  minLength={8}
                   required
-                >
-                  {languages.map((language) => (
-                    <option key={language.code} value={language.code}>
-                      {language.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={18} aria-hidden="true" />
+                />
               </span>
             </label>
 
-            <button className="primary-action" type="submit">
+            {authMode === 'register' && (
+              <label>
+                Confirmer le mot de passe
+                <span>
+                  <Lock size={18} />
+                  <input
+                    type="password"
+                    value={authForm.password_confirmation}
+                    onChange={handleAuthChange('password_confirmation')}
+                    placeholder="••••••••"
+                    minLength={8}
+                    required
+                  />
+                </span>
+              </label>
+            )}
+
+            {authMode === 'register' && (
+              <label>
+                Langue principale
+                <span>
+                  <Globe2 size={18} />
+                  <select
+                    value={authForm.primary_language_code}
+                    onChange={handleAuthChange('primary_language_code')}
+                    required
+                  >
+                    {languages.map((language) => (
+                      <option key={language.code} value={language.code}>
+                        {language.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={18} aria-hidden="true" />
+                </span>
+              </label>
+            )}
+
+            {authError && (
+              <p className="auth-error" role="alert">
+                {authError}
+              </p>
+            )}
+
+            <button className="primary-action" type="submit" disabled={authLoading}>
               <Sparkles size={18} />
-              Entrer dans le prototype
+              {authLoading
+                ? 'Patiente...'
+                : authMode === 'register'
+                  ? 'Creer mon compte'
+                  : 'Se connecter'}
             </button>
           </form>
         </section>
@@ -344,6 +522,31 @@ function App() {
               </span>
             </button>
           ))}
+
+          {remoteResults.length > 0 && (
+            <div className="remote-results" aria-label="Resultats de recherche API">
+              <p className="eyebrow">Utilisateurs LinguChat</p>
+              {remoteResults.map((user) => (
+                <button
+                  key={user.id}
+                  className="conversation-item"
+                  type="button"
+                  onClick={() => setMobileSidebarOpen(false)}
+                >
+                  <span className="avatar" aria-hidden="true">
+                    {(user.username || '?').slice(0, 2).toUpperCase()}
+                  </span>
+                  <span className="conversation-meta">
+                    <strong>{user.username}</strong>
+                    <small>
+                      {(user.primary_language_code || '').toUpperCase()} ·{' '}
+                      {user.is_online ? 'En ligne' : 'Hors ligne'}
+                    </small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </nav>
 
         <section className="profile-panel" aria-label="Profil">
@@ -353,12 +556,7 @@ function App() {
           </div>
           <label>
             <Globe2 size={16} />
-            <select
-              value={profile.primary_language_code}
-              onChange={(event) =>
-                setProfile({ ...profile, primary_language_code: event.target.value })
-              }
-            >
+            <select value={profile.primary_language_code} onChange={handleLanguageChange}>
               {languages.map((language) => (
                 <option key={language.code} value={language.code}>
                   {language.code.toUpperCase()}
@@ -387,7 +585,10 @@ function App() {
           </span>
           <div className="chat-title">
             <h2>{activeConversation.name}</h2>
-            <span>{activeConversation.online ? 'En ligne' : 'Hors ligne'} · cible {profile.primary_language_code.toUpperCase()}</span>
+            <span>
+              {activeConversation.online ? 'En ligne' : 'Hors ligne'} · cible{' '}
+              {profile.primary_language_code.toUpperCase()}
+            </span>
           </div>
           <div className="chat-actions">
             <button
@@ -408,7 +609,7 @@ function App() {
               className="icon-button"
               type="button"
               aria-label="Se deconnecter"
-              onClick={() => setIsAuthenticated(false)}
+              onClick={handleLogout}
             >
               <LogOut size={19} />
             </button>

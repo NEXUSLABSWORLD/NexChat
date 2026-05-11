@@ -677,3 +677,37 @@ select {
     font-size: 0;
   }
 }
+
+.auth-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.dark .auth-error {
+  background: rgba(248, 113, 113, 0.18);
+  color: #fca5a5;
+}
+
+.remote-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 4px 0;
+  border-top: 1px dashed rgba(148, 163, 184, 0.3);
+  margin-top: 8px;
+}
+
+.remote-results .eyebrow {
+  margin: 0 0 4px;
+  padding: 0 8px;
+}
+
+.primary-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
