@@ -124,7 +124,7 @@ class ProfileController extends Controller
         }
 
         try {
-            $users = $this->supabaseService->searchUsers($request->query);
+            $users = $this->supabaseService->searchUsers($request->query('query'));
             
             return response()->json([
                 'users' => collect($users)->map(function ($user) {

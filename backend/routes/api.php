@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\MessageController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -37,6 +39,31 @@ Route::prefix('profile')->group(function () {
     
     // Search users
     Route::get('/search', [ProfileController::class, 'search']);
+});
+
+Route::prefix('conversations')->group(function () {
+    // Get all conversations for a user
+    Route::get('/', [ConversationController::class, 'index']);
+    
+    // Create or get conversation with another user
+    Route::post('/', [ConversationController::class, 'store']);
+    
+    // Get specific conversation with messages
+    Route::get('/{id}', [ConversationController::class, 'show']);
+    
+    // Mark conversation messages as read
+    Route::patch('/{id}/read', [ConversationController::class, 'markAsRead']);
+});
+
+Route::prefix('messages')->group(function () {
+    // Get messages in a conversation
+    Route::get('/', [MessageController::class, 'index']);
+    
+    // Send a message
+    Route::post('/', [MessageController::class, 'store']);
+    
+    // Mark message as read
+    Route::patch('/{id}/read', [MessageController::class, 'markAsRead']);
 });
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
