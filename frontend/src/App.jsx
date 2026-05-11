@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Bell,
+  Check,
   CheckCheck,
   ChevronDown,
   Globe2,
@@ -11,12 +11,10 @@ import {
   Moon,
   Search,
   Send,
-  Settings,
-  ShieldCheck,
   Sparkles,
   Sun,
   UserRound,
-  Wifi,
+  X,
 } from 'lucide-react'
 import { login as apiLogin, logout as apiLogout, register as apiRegister } from './api/auth'
 import {
@@ -32,13 +30,18 @@ import {
 import './App.css'
 
 const languages = [
-  { code: 'fr', label: 'Francais' },
-  { code: 'en', label: 'English' },
-  { code: 'es', label: 'Espanol' },
-  { code: 'de', label: 'Deutsch' },
-  { code: 'it', label: 'Italiano' },
-  { code: 'ar', label: 'العربية' },
+  { code: 'fr', label: 'Francais', flag: 'FR' },
+  { code: 'en', label: 'English', flag: 'EN' },
+  { code: 'es', label: 'Espanol', flag: 'ES' },
+  { code: 'de', label: 'Deutsch', flag: 'DE' },
+  { code: 'it', label: 'Italiano', flag: 'IT' },
+  { code: 'ar', label: 'العربية', flag: 'AR' },
 ]
+
+const languageLabel = (code) => {
+  const match = languages.find((language) => language.code === code)
+  return match ? match.label : (code || '').toUpperCase()
+}
 
 const conversations = [
   {
@@ -47,8 +50,10 @@ const conversations = [
     email: 'maya.chen@example.com',
     language: 'en',
     online: true,
+    typing: true,
     unread: 2,
     lastMessage: 'See you at 14:00?',
+    lastTime: '13:47',
     messages: [
       {
         id: 100,
@@ -88,8 +93,10 @@ const conversations = [
     email: 'diego.martin@example.com',
     language: 'es',
     online: false,
+    typing: false,
     unread: 0,
-    lastMessage: 'Traduction recue.',
+    lastMessage: 'Traduction recue, ca marche bien.',
+    lastTime: '10:18',
     messages: [
       {
         id: 200,
@@ -109,8 +116,10 @@ const conversations = [
     email: 'nora.becker@example.com',
     language: 'de',
     online: true,
+    typing: false,
     unread: 0,
     lastMessage: 'Je teste les indicateurs de saisie.',
+    lastTime: '09:05',
     messages: [
       {
         id: 300,
@@ -126,13 +135,29 @@ const conversations = [
   },
 ]
 
-const checklist = [
-  'Formulaire inscription / connexion',
-  'Choix obligatoire de langue principale',
-  'Liste de conversations et recherche',
-  'Affichage messages traduits + original',
-  'Presence, typing et etats de lecture',
+const heroHighlights = [
+  {
+    title: 'Traduction instantanee',
+    description: 'Chaque message arrive dans la langue de ton contact, sans lever le doigt.',
+  },
+  {
+    title: 'Conversations privees',
+    description: 'Tes echanges restent entre vous, point. Pas de pub, pas de tracking.',
+  },
+  {
+    title: '40+ langues',
+    description: 'De l italien au japonais, on garde le naturel de ta facon de parler.',
+  },
 ]
+
+const initials = (value = '') =>
+  value
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
 
 const emptyAuthForm = {
   username: '',
@@ -185,6 +210,9 @@ function App() {
   const [draft, setDraft] = useState('')
   const [showOriginal, setShowOriginal] = useState(true)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [languageMenuOpen, setLanguageMenuOpen] = useState(false)
+  const [sendPulseKey, setSendPulseKey] = useState(0)
+  const composerRef = useRef(null)
 
   const activeConversation = conversations.find(
     (conversation) => conversation.id === activeConversationId,
@@ -226,6 +254,17 @@ function App() {
     return () => clearTimeout(timeout)
   }, [query, isAuthenticated])
 
+  useEffect(() => {
+    if (!languageMenuOpen) return
+    const handler = (event) => {
+      if (!event.target.closest('[data-language-menu]')) {
+        setLanguageMenuOpen(false)
+      }
+    }
+    window.addEventListener('mousedown', handler)
+    return () => window.removeEventListener('mousedown', handler)
+  }, [languageMenuOpen])
+
   const handleAuthChange = (field) => (event) => {
     setAuthForm((current) => ({ ...current, [field]: event.target.value }))
   }
@@ -259,7 +298,9 @@ function App() {
       setAuthError(
         extractErrorMessage(
           error,
-          authMode === 'register' ? 'Inscription impossible.' : 'Connexion impossible.',
+          authMode === 'register'
+            ? 'Impossible de creer ton compte pour l instant.'
+            : 'Email ou mot de passe incorrect.',
         ),
       )
     } finally {
@@ -282,10 +323,14 @@ function App() {
     }
   }
 
-  const handleLanguageChange = async (event) => {
-    const nextLanguage = event.target.value
+  const changeLanguage = async (nextLanguage) => {
     const previous = profile.primary_language_code
+    if (nextLanguage === previous) {
+      setLanguageMenuOpen(false)
+      return
+    }
     setProfile((current) => ({ ...current, primary_language_code: nextLanguage }))
+    setLanguageMenuOpen(false)
 
     if (!profile?.id) return
 
@@ -302,6 +347,10 @@ function App() {
     }
   }
 
+  const handleAuthLanguageChange = (event) => {
+    setAuthForm((current) => ({ ...current, primary_language_code: event.target.value }))
+  }
+
   const handleSendMessage = (event) => {
     event.preventDefault()
 
@@ -309,116 +358,152 @@ function App() {
       return
     }
 
+    setSendPulseKey((key) => key + 1)
     setDraft('')
+  }
+
+  const switchAuthMode = (mode) => {
+    setAuthMode(mode)
+    setAuthError('')
   }
 
   if (!isAuthenticated) {
     return (
       <main className={`auth-shell ${theme}`}>
-        <section className="auth-panel">
-          <div className="brand-mark" aria-hidden="true">
-            <Languages size={28} />
+        <div className="auth-aurora" aria-hidden="true">
+          <span className="orb orb-a" />
+          <span className="orb orb-b" />
+          <span className="orb orb-c" />
+        </div>
+
+        <section className="auth-hero">
+          <div className="auth-brand">
+            <span className="brand-glyph" aria-hidden="true">
+              <Languages size={22} />
+            </span>
+            <span className="brand-name">NexChat</span>
           </div>
-          <p className="eyebrow">LinguChat</p>
-          <h1>Messagerie instantanee avec traduction anticipee</h1>
-          <p className="auth-copy">
-            Cree ton acces frontend, choisis ta langue principale et prepare les ecrans qui
-            consommeront l API Laravel.
+
+          <h1 className="auth-title">
+            Parle a tout le monde,
+            <br />
+            <span className="auth-title-accent">dans ta langue.</span>
+          </h1>
+
+          <p className="auth-lede">
+            Ecris en francais, tes amis lisent en anglais, en japonais ou en arabe. La traduction
+            est instantanee, fluide, et reste fidele a ton ton.
           </p>
 
-          <div className="feature-strip" aria-label="Fonctionnalites">
-            <span>
-              <ShieldCheck size={16} /> Auth securisee
-            </span>
-            <span>
-              <Wifi size={16} /> Temps reel
-            </span>
-            <span>
-              <Globe2 size={16} /> Traduction IA
-            </span>
-          </div>
+          <ul className="auth-highlights" aria-label="Atouts">
+            {heroHighlights.map((highlight) => (
+              <li key={highlight.title}>
+                <span className="auth-highlight-icon" aria-hidden="true">
+                  <Check size={14} strokeWidth={3} />
+                </span>
+                <div>
+                  <strong>{highlight.title}</strong>
+                  <p>{highlight.description}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
         </section>
 
-        <section className="auth-card" aria-label="Connexion">
-          <div className="auth-tabs">
+        <section className="auth-card" aria-label="Acces a ton compte">
+          <header className="auth-card-header">
+            <h2>
+              {authMode === 'login' ? 'Bon retour parmi nous' : 'Cree ton compte'}
+            </h2>
+            <p>
+              {authMode === 'login'
+                ? 'Reprends tes conversations la ou tu les as laissees.'
+                : 'En 30 secondes, tu envoies ton premier message multilingue.'}
+            </p>
+          </header>
+
+          <div className="segmented" role="tablist" data-mode={authMode}>
+            <span className="segmented-indicator" aria-hidden="true" />
             <button
-              className={authMode === 'login' ? 'active' : ''}
               type="button"
-              onClick={() => {
-                setAuthMode('login')
-                setAuthError('')
-              }}
+              role="tab"
+              aria-selected={authMode === 'login'}
+              className={authMode === 'login' ? 'active' : ''}
+              onClick={() => switchAuthMode('login')}
             >
               Connexion
             </button>
             <button
-              className={authMode === 'register' ? 'active' : ''}
               type="button"
-              onClick={() => {
-                setAuthMode('register')
-                setAuthError('')
-              }}
+              role="tab"
+              aria-selected={authMode === 'register'}
+              className={authMode === 'register' ? 'active' : ''}
+              onClick={() => switchAuthMode('register')}
             >
               Inscription
             </button>
           </div>
 
-          <form onSubmit={handleAuthSubmit} className="auth-form">
+          <form onSubmit={handleAuthSubmit} className="auth-form" noValidate>
             {authMode === 'register' && (
-              <label>
-                Nom utilisateur
-                <span>
-                  <UserRound size={18} />
+              <label className="field">
+                <span className="field-label">Nom d utilisateur</span>
+                <span className="field-input">
+                  <UserRound size={18} strokeWidth={1.7} />
                   <input
                     value={authForm.username}
                     onChange={handleAuthChange('username')}
-                    placeholder="sam.frontend"
+                    placeholder="ex. sam.chen"
+                    autoComplete="username"
                     required
                   />
                 </span>
               </label>
             )}
 
-            <label>
-              Email
-              <span>
-                <UserRound size={18} />
+            <label className="field">
+              <span className="field-label">Email</span>
+              <span className="field-input">
+                <UserRound size={18} strokeWidth={1.7} />
                 <input
                   type="email"
                   value={authForm.email}
                   onChange={handleAuthChange('email')}
-                  placeholder="toi@example.com"
+                  placeholder="toi@exemple.com"
+                  autoComplete="email"
                   required
                 />
               </span>
             </label>
 
-            <label>
-              Mot de passe
-              <span>
-                <Lock size={18} />
+            <label className="field">
+              <span className="field-label">Mot de passe</span>
+              <span className="field-input">
+                <Lock size={18} strokeWidth={1.7} />
                 <input
                   type="password"
                   value={authForm.password}
                   onChange={handleAuthChange('password')}
-                  placeholder="••••••••"
+                  placeholder="8 caracteres minimum"
                   minLength={8}
+                  autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
                   required
                 />
               </span>
             </label>
 
             {authMode === 'register' && (
-              <label>
-                Confirmer le mot de passe
-                <span>
-                  <Lock size={18} />
+              <label className="field">
+                <span className="field-label">Confirme le mot de passe</span>
+                <span className="field-input">
+                  <Lock size={18} strokeWidth={1.7} />
                   <input
                     type="password"
                     value={authForm.password_confirmation}
                     onChange={handleAuthChange('password_confirmation')}
-                    placeholder="••••••••"
+                    placeholder="Encore une fois"
                     minLength={8}
+                    autoComplete="new-password"
                     required
                   />
                 </span>
@@ -426,13 +511,13 @@ function App() {
             )}
 
             {authMode === 'register' && (
-              <label>
-                Langue principale
-                <span>
-                  <Globe2 size={18} />
+              <label className="field">
+                <span className="field-label">Tu lis dans quelle langue ?</span>
+                <span className="field-input">
+                  <Globe2 size={18} strokeWidth={1.7} />
                   <select
                     value={authForm.primary_language_code}
-                    onChange={handleAuthChange('primary_language_code')}
+                    onChange={handleAuthLanguageChange}
                     required
                   >
                     {languages.map((language) => (
@@ -441,25 +526,54 @@ function App() {
                       </option>
                     ))}
                   </select>
-                  <ChevronDown size={18} aria-hidden="true" />
+                  <ChevronDown size={16} aria-hidden="true" />
                 </span>
               </label>
             )}
 
             {authError && (
-              <p className="auth-error" role="alert">
-                {authError}
-              </p>
+              <div className="auth-error" role="alert">
+                <X size={16} strokeWidth={2.2} />
+                <span>{authError}</span>
+              </div>
             )}
 
-            <button className="primary-action" type="submit" disabled={authLoading}>
-              <Sparkles size={18} />
-              {authLoading
-                ? 'Patiente...'
-                : authMode === 'register'
-                  ? 'Creer mon compte'
-                  : 'Se connecter'}
+            <button
+              className={`primary-action ${authLoading ? 'is-loading' : ''}`}
+              type="submit"
+              disabled={authLoading}
+            >
+              {authLoading ? (
+                <span className="dot-loader" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              ) : (
+                <>
+                  <Sparkles size={17} strokeWidth={2} />
+                  {authMode === 'register' ? 'Creer mon compte' : 'Se connecter'}
+                </>
+              )}
             </button>
+
+            <p className="auth-switch">
+              {authMode === 'login' ? (
+                <>
+                  Premiere fois ici ?{' '}
+                  <button type="button" onClick={() => switchAuthMode('register')}>
+                    Cree ton compte
+                  </button>
+                </>
+              ) : (
+                <>
+                  Tu as deja un compte ?{' '}
+                  <button type="button" onClick={() => switchAuthMode('login')}>
+                    Connecte-toi
+                  </button>
+                </>
+              )}
+            </p>
           </form>
         </section>
       </main>
@@ -468,32 +582,67 @@ function App() {
 
   return (
     <main className={`app-shell ${theme}`}>
+      {mobileSidebarOpen && (
+        <button
+          className="sidebar-scrim"
+          type="button"
+          aria-label="Fermer la liste des conversations"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+
       <aside className={`sidebar ${mobileSidebarOpen ? 'open' : ''}`}>
         <header className="sidebar-header">
-          <div>
-            <p className="eyebrow">LinguChat</p>
-            <h1>Conversations</h1>
+          <div className="sidebar-brand">
+            <span className="brand-glyph small" aria-hidden="true">
+              <Languages size={16} />
+            </span>
+            <span>NexChat</span>
           </div>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Basculer le theme"
-            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-          >
-            {theme === 'light' ? <Moon size={19} /> : <Sun size={19} />}
-          </button>
+          <div className="sidebar-header-actions">
+            <button
+              className="icon-button"
+              type="button"
+              aria-label={theme === 'light' ? 'Activer le mode sombre' : 'Activer le mode clair'}
+              onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+            >
+              {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+            </button>
+            <button
+              className="icon-button mobile-only"
+              type="button"
+              aria-label="Fermer"
+              onClick={() => setMobileSidebarOpen(false)}
+            >
+              <X size={18} />
+            </button>
+          </div>
         </header>
 
         <label className="search-field">
-          <Search size={18} />
+          <Search size={17} strokeWidth={1.8} />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Rechercher un contact"
+            placeholder="Rechercher un ami, un message..."
           />
+          {query && (
+            <button
+              type="button"
+              className="search-clear"
+              aria-label="Effacer la recherche"
+              onClick={() => setQuery('')}
+            >
+              <X size={14} />
+            </button>
+          )}
         </label>
 
         <nav className="conversation-list" aria-label="Conversations">
+          {filteredConversations.length === 0 && (
+            <p className="conversation-empty">Aucune discussion ne correspond.</p>
+          )}
+
           {filteredConversations.map((conversation) => (
             <button
               className={`conversation-item ${
@@ -507,39 +656,44 @@ function App() {
               }}
             >
               <span className="avatar" aria-hidden="true">
-                {conversation.name
-                  .split(' ')
-                  .map((part) => part[0])
-                  .join('')}
+                {initials(conversation.name)}
+                {conversation.online && <span className="presence-dot" />}
               </span>
               <span className="conversation-meta">
-                <strong>{conversation.name}</strong>
-                <small>{conversation.lastMessage}</small>
-              </span>
-              <span className="conversation-state">
-                <i className={conversation.online ? 'online' : ''} />
-                {conversation.unread > 0 && <b>{conversation.unread}</b>}
+                <span className="conversation-line">
+                  <strong>{conversation.name}</strong>
+                  <small>{conversation.lastTime}</small>
+                </span>
+                <span className="conversation-line">
+                  <small className={conversation.typing ? 'typing' : ''}>
+                    {conversation.typing ? 'ecrit...' : conversation.lastMessage}
+                  </small>
+                  {conversation.unread > 0 && (
+                    <b className="unread-badge">{conversation.unread}</b>
+                  )}
+                </span>
               </span>
             </button>
           ))}
 
           {remoteResults.length > 0 && (
-            <div className="remote-results" aria-label="Resultats de recherche API">
-              <p className="eyebrow">Utilisateurs LinguChat</p>
+            <div className="remote-results" aria-label="Resultats de recherche">
+              <p className="section-label">Nouveaux contacts</p>
               {remoteResults.map((user) => (
                 <button
                   key={user.id}
-                  className="conversation-item"
+                  className="conversation-item subtle"
                   type="button"
                   onClick={() => setMobileSidebarOpen(false)}
                 >
                   <span className="avatar" aria-hidden="true">
-                    {(user.username || '?').slice(0, 2).toUpperCase()}
+                    {initials(user.username || '?')}
+                    {user.is_online && <span className="presence-dot" />}
                   </span>
                   <span className="conversation-meta">
                     <strong>{user.username}</strong>
                     <small>
-                      {(user.primary_language_code || '').toUpperCase()} ·{' '}
+                      {languageLabel(user.primary_language_code)} ·{' '}
                       {user.is_online ? 'En ligne' : 'Hors ligne'}
                     </small>
                   </span>
@@ -549,21 +703,58 @@ function App() {
           )}
         </nav>
 
-        <section className="profile-panel" aria-label="Profil">
-          <div>
-            <strong>{profile.username}</strong>
+        <section className="profile-panel" aria-label="Mon profil">
+          <span className="avatar profile-avatar" aria-hidden="true">
+            {initials(profile.username || profile.email || '?')}
+          </span>
+          <div className="profile-info">
+            <strong>{profile.username || 'Toi'}</strong>
             <span>{profile.email}</span>
           </div>
-          <label>
-            <Globe2 size={16} />
-            <select value={profile.primary_language_code} onChange={handleLanguageChange}>
-              {languages.map((language) => (
-                <option key={language.code} value={language.code}>
-                  {language.code.toUpperCase()}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="profile-actions" data-language-menu>
+            <button
+              type="button"
+              className="language-chip"
+              aria-haspopup="listbox"
+              aria-expanded={languageMenuOpen}
+              onClick={() => setLanguageMenuOpen((open) => !open)}
+            >
+              <Globe2 size={14} strokeWidth={2} />
+              {(profile.primary_language_code || 'fr').toUpperCase()}
+              <ChevronDown size={13} strokeWidth={2} />
+            </button>
+            {languageMenuOpen && (
+              <ul className="language-menu" role="listbox">
+                {languages.map((language) => (
+                  <li key={language.code}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={profile.primary_language_code === language.code}
+                      className={
+                        profile.primary_language_code === language.code ? 'is-selected' : ''
+                      }
+                      onClick={() => changeLanguage(language.code)}
+                    >
+                      <span className="language-flag">{language.flag}</span>
+                      {language.label}
+                      {profile.primary_language_code === language.code && (
+                        <Check size={14} strokeWidth={2.5} />
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button
+              className="icon-button ghost"
+              type="button"
+              aria-label="Se deconnecter"
+              onClick={handleLogout}
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
         </section>
       </aside>
 
@@ -577,17 +768,22 @@ function App() {
           >
             <Menu size={20} />
           </button>
-          <span className="avatar large" aria-hidden="true">
-            {activeConversation.name
-              .split(' ')
-              .map((part) => part[0])
-              .join('')}
+          <span className="avatar" aria-hidden="true">
+            {initials(activeConversation.name)}
+            {activeConversation.online && <span className="presence-dot" />}
           </span>
           <div className="chat-title">
             <h2>{activeConversation.name}</h2>
             <span>
-              {activeConversation.online ? 'En ligne' : 'Hors ligne'} · cible{' '}
-              {profile.primary_language_code.toUpperCase()}
+              {activeConversation.typing
+                ? 'ecrit en ce moment...'
+                : activeConversation.online
+                  ? 'En ligne'
+                  : 'Vu recemment'}
+              {' · '}
+              <span className="chat-language">{languageLabel(activeConversation.language)}</span>
+              {' → '}
+              <span className="chat-language">{languageLabel(profile.primary_language_code)}</span>
             </span>
           </div>
           <div className="chat-actions">
@@ -595,69 +791,83 @@ function App() {
               className={`toggle-button ${showOriginal ? 'active' : ''}`}
               type="button"
               onClick={() => setShowOriginal(!showOriginal)}
+              aria-pressed={showOriginal}
             >
-              <Languages size={17} />
-              Original
-            </button>
-            <button className="icon-button" type="button" aria-label="Notifications">
-              <Bell size={19} />
-            </button>
-            <button className="icon-button" type="button" aria-label="Parametres">
-              <Settings size={19} />
-            </button>
-            <button
-              className="icon-button"
-              type="button"
-              aria-label="Se deconnecter"
-              onClick={handleLogout}
-            >
-              <LogOut size={19} />
+              <Languages size={15} strokeWidth={1.9} />
+              <span>Original</span>
             </button>
           </div>
         </header>
 
-        <section className="status-grid" aria-label="Avancement frontend">
-          {checklist.map((item) => (
-            <span key={item}>
-              <CheckCheck size={16} /> {item}
-            </span>
-          ))}
-        </section>
-
         <section className="message-list" aria-label="Messages">
-          {activeConversation.messages.map((message) => (
-            <article className={`message ${message.sender === 'me' ? 'mine' : ''}`} key={message.id}>
-              <p>{message.content_translated}</p>
-              {showOriginal && message.content_original !== message.content_translated && (
-                <small>
-                  Original {message.source_lang.toUpperCase()} : {message.content_original}
-                </small>
-              )}
-              <footer>
-                <span>{message.time}</span>
-                <span>{message.status === 'read' ? 'Lu' : 'Recu'}</span>
-              </footer>
-            </article>
-          ))}
+          <div className="day-divider">
+            <span>Aujourd hui</span>
+          </div>
 
-          {activeConversation.online && (
-            <div className="typing-indicator">
-              <span />
-              <span />
-              <span />
-              {activeConversation.name.split(' ')[0]} ecrit
-            </div>
+          {activeConversation.messages.map((message) => {
+            const showOriginalLine =
+              showOriginal && message.content_original !== message.content_translated
+
+            return (
+              <article
+                className={`message ${message.sender === 'me' ? 'mine' : 'theirs'}`}
+                key={message.id}
+              >
+                <div className="bubble">
+                  <p>{message.content_translated}</p>
+                  {showOriginalLine && (
+                    <small>
+                      <span className="message-lang">{message.source_lang.toUpperCase()}</span>
+                      {message.content_original}
+                    </small>
+                  )}
+                  <footer>
+                    <span>{message.time}</span>
+                    {message.sender === 'me' && (
+                      <span className="message-status" aria-label={message.status}>
+                        {message.status === 'read' ? (
+                          <CheckCheck size={13} strokeWidth={2.2} />
+                        ) : (
+                          <Check size={13} strokeWidth={2.2} />
+                        )}
+                      </span>
+                    )}
+                  </footer>
+                </div>
+              </article>
+            )
+          })}
+
+          {activeConversation.typing && (
+            <article className="message theirs">
+              <div className="bubble typing-bubble">
+                <span className="typing-indicator" aria-label="Ton contact ecrit">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              </div>
+            </article>
           )}
         </section>
 
-        <form className="composer" onSubmit={handleSendMessage}>
+        <form className="composer" onSubmit={handleSendMessage} ref={composerRef}>
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="Ecrire un message a traduire..."
+            placeholder={`Ecris en ${languageLabel(profile.primary_language_code)}...`}
+            aria-label="Nouveau message"
           />
-          <button className="primary-action compact" type="submit" aria-label="Envoyer">
-            <Send size={18} />
+          <button
+            key={sendPulseKey}
+            className={`primary-action compact send-button ${
+              draft.trim() ? 'has-content' : ''
+            }`}
+            type="submit"
+            aria-label="Envoyer"
+            disabled={!draft.trim()}
+          >
+            <Send size={17} strokeWidth={2} />
           </button>
         </form>
       </section>
