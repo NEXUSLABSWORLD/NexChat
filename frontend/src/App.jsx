@@ -226,6 +226,13 @@ function App() {
       setIsAuthenticated(false)
       setProfile((current) => ({ ...current, id: null }))
       setAuthForm(emptyAuthForm)
+      setSelectedContact(null)
+      setContacts([])
+      setContactsError('')
+      setMessagesByContact({})
+      setQuery('')
+      setDraft('')
+      setMobileSidebarOpen(false)
     }
   }
 
