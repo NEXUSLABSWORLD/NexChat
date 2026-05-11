@@ -1540,6 +1540,9 @@ select {
     border-radius: 0;
     border: 0;
     box-shadow: none;
+    /* l animation rise utilise translateY donc ecrase le translateX du drawer ;
+       on la coupe sur mobile pour que le sidebar reste cache par defaut. */
+    animation: none;
   }
 
   .sidebar {
@@ -1557,6 +1560,11 @@ select {
     transform: translateX(0);
   }
 
+  .chat-panel {
+    grid-column: 1 / -1;
+    min-height: 100vh;
+  }
+
   .sidebar-scrim {
     display: block;
     position: fixed;
@@ -1570,10 +1578,6 @@ select {
 
   .mobile-only {
     display: grid;
-  }
-
-  .chat-panel {
-    min-height: 100vh;
   }
 }
 
