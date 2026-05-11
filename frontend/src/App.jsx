@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Check,
   CheckCheck,
@@ -42,98 +42,6 @@ const languageLabel = (code) => {
   const match = languages.find((language) => language.code === code)
   return match ? match.label : (code || '').toUpperCase()
 }
-
-const conversations = [
-  {
-    id: 10,
-    name: 'Maya Chen',
-    email: 'maya.chen@example.com',
-    language: 'en',
-    online: true,
-    typing: true,
-    unread: 2,
-    lastMessage: 'See you at 14:00?',
-    lastTime: '13:47',
-    messages: [
-      {
-        id: 100,
-        sender: 'them',
-        time: '13:42',
-        content_translated: 'Salut Sam, tu peux relire la maquette du profil ?',
-        content_original: 'Hi Sam, can you review the profile mockup?',
-        source_lang: 'en',
-        target_lang: 'fr',
-        status: 'read',
-      },
-      {
-        id: 101,
-        sender: 'me',
-        time: '13:44',
-        content_translated: 'Oui, je termine la vue conversation avant.',
-        content_original: 'Oui, je termine la vue conversation avant.',
-        source_lang: 'fr',
-        target_lang: 'en',
-        status: 'read',
-      },
-      {
-        id: 102,
-        sender: 'them',
-        time: '13:47',
-        content_translated: 'Parfait. On garde aussi l option pour afficher le texte original.',
-        content_original: 'Perfect. We also keep the option to show the original text.',
-        source_lang: 'en',
-        target_lang: 'fr',
-        status: 'delivered',
-      },
-    ],
-  },
-  {
-    id: 11,
-    name: 'Diego Martin',
-    email: 'diego.martin@example.com',
-    language: 'es',
-    online: false,
-    typing: false,
-    unread: 0,
-    lastMessage: 'Traduction recue, ca marche bien.',
-    lastTime: '10:18',
-    messages: [
-      {
-        id: 200,
-        sender: 'them',
-        time: '10:18',
-        content_translated: 'J ai recu la traduction, ca marche bien.',
-        content_original: 'Recibi la traduccion, funciona bien.',
-        source_lang: 'es',
-        target_lang: 'fr',
-        status: 'read',
-      },
-    ],
-  },
-  {
-    id: 12,
-    name: 'Nora Becker',
-    email: 'nora.becker@example.com',
-    language: 'de',
-    online: true,
-    typing: false,
-    unread: 0,
-    lastMessage: 'Je teste les indicateurs de saisie.',
-    lastTime: '09:05',
-    messages: [
-      {
-        id: 300,
-        sender: 'them',
-        time: '09:05',
-        content_translated: 'Je teste les indicateurs de saisie.',
-        content_original: 'Ich teste die Tippanzeigen.',
-        source_lang: 'de',
-        target_lang: 'fr',
-        status: 'delivered',
-      },
-    ],
-  },
-]
 
 const heroHighlights = [
   {
@@ -197,16 +105,19 @@ function App() {
   const [profile, setProfile] = useState(
     storedUser || {
       id: null,
-      username: 'Sam Frontend',
-      email: 'sam.frontend@example.com',
+      username: '',
+      email: '',
       primary_language_code: 'fr',
     },
   )
   const [authError, setAuthError] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
-  const [activeConversationId, setActiveConversationId] = useState(conversations[0].id)
+  const [selectedContact, setSelectedContact] = useState(null)
+  const [contacts, setContacts] = useState([])
+  const [contactsLoading, setContactsLoading] = useState(false)
+  const [contactsError, setContactsError] = useState('')
+  const [messagesByContact, setMessagesByContact] = useState({})
   const [query, setQuery] = useState('')
-  const [remoteResults, setRemoteResults] = useState([])
   const [draft, setDraft] = useState('')
   const [showOriginal, setShowOriginal] = useState(true)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
@@ -214,45 +125,40 @@ function App() {
   const [sendPulseKey, setSendPulseKey] = useState(0)
   const composerRef = useRef(null)
 
-  const activeConversation = conversations.find(
-    (conversation) => conversation.id === activeConversationId,
-  )
+  const contactMessages = selectedContact
+    ? messagesByContact[selectedContact.id] || []
+    : []
 
-  const filteredConversations = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-
-    if (!normalizedQuery) {
-      return conversations
-    }
-
-    return conversations.filter((conversation) =>
-      [conversation.name, conversation.email, conversation.lastMessage]
-        .join(' ')
-        .toLowerCase()
-        .includes(normalizedQuery),
-    )
-  }, [query])
+  const showContacts = query.trim().length >= 2
+  const displayedContacts = showContacts ? contacts : []
 
   // Recherche distante (GET /api/profile/search) — declenche apres 2 caracteres.
   useEffect(() => {
     if (!isAuthenticated) return
-
     const trimmed = query.trim()
+    if (trimmed.length < 2) return
+
     const timeout = setTimeout(async () => {
-      if (trimmed.length < 2) {
-        setRemoteResults([])
-        return
-      }
+      setContactsLoading(true)
+      setContactsError('')
       try {
         const data = await apiSearchUsers(trimmed)
-        setRemoteResults(data?.users || [])
-      } catch {
-        setRemoteResults([])
+        const users = (data?.users || []).filter(
+          (user) => user.id && user.id !== profile?.id,
+        )
+        setContacts(users)
+      } catch (error) {
+        setContacts([])
+        setContactsError(
+          extractErrorMessage(error, 'Recherche indisponible pour le moment.'),
+        )
+      } finally {
+        setContactsLoading(false)
       }
     }, 300)
 
     return () => clearTimeout(timeout)
-  }, [query, isAuthenticated])
+  }, [query, isAuthenticated, profile?.id])
 
   useEffect(() => {
     if (!languageMenuOpen) return
@@ -354,12 +260,35 @@ function App() {
   const handleSendMessage = (event) => {
     event.preventDefault()
 
-    if (!draft.trim()) {
+    const trimmed = draft.trim()
+    if (!trimmed || !selectedContact) {
       return
     }
 
+    const now = new Date()
+    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+    const message = {
+      id: `local-${now.getTime()}`,
+      sender: 'me',
+      time,
+      content_translated: trimmed,
+      content_original: trimmed,
+      source_lang: profile.primary_language_code || 'fr',
+      target_lang: selectedContact.primary_language_code || 'fr',
+      status: 'sent',
+    }
+
+    setMessagesByContact((current) => ({
+      ...current,
+      [selectedContact.id]: [...(current[selectedContact.id] || []), message],
+    }))
     setSendPulseKey((key) => key + 1)
     setDraft('')
+  }
+
+  const openContact = (user) => {
+    setSelectedContact(user)
+    setMobileSidebarOpen(false)
   }
 
   const switchAuthMode = (mode) => {
@@ -638,69 +567,62 @@ function App() {
           )}
         </label>
 
-        <nav className="conversation-list" aria-label="Conversations">
-          {filteredConversations.length === 0 && (
-            <p className="conversation-empty">Aucune discussion ne correspond.</p>
+        <nav className="conversation-list" aria-label="Contacts">
+          {!showContacts && (
+            <p className="conversation-empty">
+              Tape au moins 2 caracteres pour trouver un ami par nom ou email.
+            </p>
           )}
 
-          {filteredConversations.map((conversation) => (
-            <button
-              className={`conversation-item ${
-                conversation.id === activeConversationId ? 'active' : ''
-              }`}
-              key={conversation.id}
-              type="button"
-              onClick={() => {
-                setActiveConversationId(conversation.id)
-                setMobileSidebarOpen(false)
-              }}
-            >
-              <span className="avatar" aria-hidden="true">
-                {initials(conversation.name)}
-                {conversation.online && <span className="presence-dot" />}
-              </span>
-              <span className="conversation-meta">
-                <span className="conversation-line">
-                  <strong>{conversation.name}</strong>
-                  <small>{conversation.lastTime}</small>
-                </span>
-                <span className="conversation-line">
-                  <small className={conversation.typing ? 'typing' : ''}>
-                    {conversation.typing ? 'ecrit...' : conversation.lastMessage}
-                  </small>
-                  {conversation.unread > 0 && (
-                    <b className="unread-badge">{conversation.unread}</b>
-                  )}
-                </span>
-              </span>
-            </button>
-          ))}
+          {showContacts && contactsLoading && (
+            <p className="conversation-empty">Recherche en cours...</p>
+          )}
 
-          {remoteResults.length > 0 && (
-            <div className="remote-results" aria-label="Resultats de recherche">
-              <p className="section-label">Nouveaux contacts</p>
-              {remoteResults.map((user) => (
-                <button
-                  key={user.id}
-                  className="conversation-item subtle"
-                  type="button"
-                  onClick={() => setMobileSidebarOpen(false)}
-                >
-                  <span className="avatar" aria-hidden="true">
-                    {initials(user.username || '?')}
-                    {user.is_online && <span className="presence-dot" />}
+          {showContacts && !contactsLoading && contactsError && (
+            <p className="conversation-empty error">{contactsError}</p>
+          )}
+
+          {showContacts &&
+            !contactsLoading &&
+            !contactsError &&
+            displayedContacts.length === 0 && (
+              <p className="conversation-empty">Aucun utilisateur trouve.</p>
+            )}
+
+          {displayedContacts.map((user) => {
+            const messages = messagesByContact[user.id] || []
+            const lastMessage = messages[messages.length - 1]
+            const isActive = selectedContact?.id === user.id
+
+            return (
+              <button
+                className={`conversation-item ${isActive ? 'active' : ''}`}
+                key={user.id}
+                type="button"
+                onClick={() => openContact(user)}
+              >
+                <span className="avatar" aria-hidden="true">
+                  {initials(user.username || user.email || '?')}
+                  {user.is_online && <span className="presence-dot" />}
+                </span>
+                <span className="conversation-meta">
+                  <span className="conversation-line">
+                    <strong>{user.username || user.email}</strong>
+                    {lastMessage && <small>{lastMessage.time}</small>}
                   </span>
-                  <span className="conversation-meta">
-                    <strong>{user.username}</strong>
+                  <span className="conversation-line">
                     <small>
-                      {languageLabel(user.primary_language_code)} ·{' '}
-                      {user.is_online ? 'En ligne' : 'Hors ligne'}
+                      {lastMessage
+                        ? lastMessage.content_translated
+                        : `${languageLabel(user.primary_language_code)} · ${
+                            user.is_online ? 'En ligne' : 'Hors ligne'
+                          }`}
                     </small>
                   </span>
-                </button>
-              ))}
-            </div>
-          )}
+                </span>
+              </button>
+            )
+          })}
         </nav>
 
         <section className="profile-panel" aria-label="Mon profil">
@@ -759,117 +681,152 @@ function App() {
       </aside>
 
       <section className="chat-panel">
-        <header className="chat-header">
-          <button
-            className="icon-button mobile-only"
-            type="button"
-            aria-label="Ouvrir les conversations"
-            onClick={() => setMobileSidebarOpen(true)}
-          >
-            <Menu size={20} />
-          </button>
-          <span className="avatar" aria-hidden="true">
-            {initials(activeConversation.name)}
-            {activeConversation.online && <span className="presence-dot" />}
-          </span>
-          <div className="chat-title">
-            <h2>{activeConversation.name}</h2>
-            <span>
-              {activeConversation.typing
-                ? 'ecrit en ce moment...'
-                : activeConversation.online
-                  ? 'En ligne'
-                  : 'Vu recemment'}
-              {' · '}
-              <span className="chat-language">{languageLabel(activeConversation.language)}</span>
-              {' → '}
-              <span className="chat-language">{languageLabel(profile.primary_language_code)}</span>
-            </span>
-          </div>
-          <div className="chat-actions">
-            <button
-              className={`toggle-button ${showOriginal ? 'active' : ''}`}
-              type="button"
-              onClick={() => setShowOriginal(!showOriginal)}
-              aria-pressed={showOriginal}
-            >
-              <Languages size={15} strokeWidth={1.9} />
-              <span>Original</span>
-            </button>
-          </div>
-        </header>
-
-        <section className="message-list" aria-label="Messages">
-          <div className="day-divider">
-            <span>Aujourd hui</span>
-          </div>
-
-          {activeConversation.messages.map((message) => {
-            const showOriginalLine =
-              showOriginal && message.content_original !== message.content_translated
-
-            return (
-              <article
-                className={`message ${message.sender === 'me' ? 'mine' : 'theirs'}`}
-                key={message.id}
+        {selectedContact ? (
+          <>
+            <header className="chat-header">
+              <button
+                className="icon-button mobile-only"
+                type="button"
+                aria-label="Ouvrir les conversations"
+                onClick={() => setMobileSidebarOpen(true)}
               >
-                <div className="bubble">
-                  <p>{message.content_translated}</p>
-                  {showOriginalLine && (
-                    <small>
-                      <span className="message-lang">{message.source_lang.toUpperCase()}</span>
-                      {message.content_original}
-                    </small>
-                  )}
-                  <footer>
-                    <span>{message.time}</span>
-                    {message.sender === 'me' && (
-                      <span className="message-status" aria-label={message.status}>
-                        {message.status === 'read' ? (
-                          <CheckCheck size={13} strokeWidth={2.2} />
-                        ) : (
-                          <Check size={13} strokeWidth={2.2} />
-                        )}
-                      </span>
-                    )}
-                  </footer>
-                </div>
-              </article>
-            )
-          })}
-
-          {activeConversation.typing && (
-            <article className="message theirs">
-              <div className="bubble typing-bubble">
-                <span className="typing-indicator" aria-label="Ton contact ecrit">
-                  <span />
-                  <span />
-                  <span />
+                <Menu size={20} />
+              </button>
+              <span className="avatar" aria-hidden="true">
+                {initials(selectedContact.username || selectedContact.email || '?')}
+                {selectedContact.is_online && <span className="presence-dot" />}
+              </span>
+              <div className="chat-title">
+                <h2>{selectedContact.username || selectedContact.email}</h2>
+                <span>
+                  {selectedContact.is_online ? 'En ligne' : 'Vu recemment'}
+                  {' · '}
+                  <span className="chat-language">
+                    {languageLabel(selectedContact.primary_language_code)}
+                  </span>
+                  {' → '}
+                  <span className="chat-language">
+                    {languageLabel(profile.primary_language_code)}
+                  </span>
                 </span>
               </div>
-            </article>
-          )}
-        </section>
+              <div className="chat-actions">
+                <button
+                  className={`toggle-button ${showOriginal ? 'active' : ''}`}
+                  type="button"
+                  onClick={() => setShowOriginal(!showOriginal)}
+                  aria-pressed={showOriginal}
+                >
+                  <Languages size={15} strokeWidth={1.9} />
+                  <span>Original</span>
+                </button>
+              </div>
+            </header>
 
-        <form className="composer" onSubmit={handleSendMessage} ref={composerRef}>
-          <input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={`Ecris en ${languageLabel(profile.primary_language_code)}...`}
-            aria-label="Nouveau message"
-          />
-          <button
-            key={sendPulseKey}
-            className={`primary-action compact send-button ${
-              draft.trim() ? 'has-content' : ''
-            }`}
-            type="submit"
-            aria-label="Envoyer"
-            disabled={!draft.trim()}
-          >
-            <Send size={17} strokeWidth={2} />
-          </button>
-        </form>
+            <section className="message-list" aria-label="Messages">
+              {contactMessages.length === 0 ? (
+                <div className="chat-empty">
+                  <span className="chat-empty-glyph" aria-hidden="true">
+                    <Sparkles size={22} strokeWidth={1.8} />
+                  </span>
+                  <h3>Aucun message pour le moment.</h3>
+                  <p>
+                    Envoie le premier message a{' '}
+                    {selectedContact.username || selectedContact.email}. La persistance
+                    cote serveur arrivera quand le backend exposera l API messages.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="day-divider">
+                    <span>Aujourd hui</span>
+                  </div>
+
+                  {contactMessages.map((message) => {
+                    const showOriginalLine =
+                      showOriginal &&
+                      message.content_original !== message.content_translated
+
+                    return (
+                      <article
+                        className={`message ${
+                          message.sender === 'me' ? 'mine' : 'theirs'
+                        }`}
+                        key={message.id}
+                      >
+                        <div className="bubble">
+                          <p>{message.content_translated}</p>
+                          {showOriginalLine && (
+                            <small>
+                              <span className="message-lang">
+                                {(message.source_lang || '').toUpperCase()}
+                              </span>
+                              {message.content_original}
+                            </small>
+                          )}
+                          <footer>
+                            <span>{message.time}</span>
+                            {message.sender === 'me' && (
+                              <span
+                                className="message-status"
+                                aria-label={message.status}
+                              >
+                                {message.status === 'read' ? (
+                                  <CheckCheck size={13} strokeWidth={2.2} />
+                                ) : (
+                                  <Check size={13} strokeWidth={2.2} />
+                                )}
+                              </span>
+                            )}
+                          </footer>
+                        </div>
+                      </article>
+                    )
+                  })}
+                </>
+              )}
+            </section>
+
+            <form className="composer" onSubmit={handleSendMessage} ref={composerRef}>
+              <input
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder={`Ecris en ${languageLabel(profile.primary_language_code)}...`}
+                aria-label="Nouveau message"
+              />
+              <button
+                key={sendPulseKey}
+                className={`primary-action compact send-button ${
+                  draft.trim() ? 'has-content' : ''
+                }`}
+                type="submit"
+                aria-label="Envoyer"
+                disabled={!draft.trim()}
+              >
+                <Send size={17} strokeWidth={2} />
+              </button>
+            </form>
+          </>
+        ) : (
+          <div className="chat-placeholder">
+            <button
+              className="icon-button mobile-only chat-placeholder-toggle"
+              type="button"
+              aria-label="Ouvrir les conversations"
+              onClick={() => setMobileSidebarOpen(true)}
+            >
+              <Menu size={20} />
+            </button>
+            <span className="chat-placeholder-glyph" aria-hidden="true">
+              <Languages size={28} strokeWidth={1.6} />
+            </span>
+            <h2>Selectionne une conversation</h2>
+            <p>
+              Cherche un ami par nom ou email dans la barre a gauche pour ouvrir
+              une discussion multilingue.
+            </p>
+          </div>
+        )}
       </section>
     </main>
   )
