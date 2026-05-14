@@ -2,28 +2,21 @@
 
 namespace Tests\Feature;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Foundation\Testing\WithFaker;
-use Tests\TestCase;
 use App\Services\SupabaseService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 class SupabaseConnectionTest extends TestCase
 {
+    use RefreshDatabase;
+
     /**
-     * Test Supabase database connection
+     * Test database connection via service
      */
-    public function test_supabase_connection(): void
+    public function test_database_connection(): void
     {
         $supabase = new SupabaseService();
-        
-        // This will test if we can connect to the database
-        $isConnected = $supabase->testConnection();
-        
-        if ($isConnected) {
-            $this->assertTrue(true, 'Successfully connected to Supabase database');
-        } else {
-            $this->markTestSkipped('Cannot connect to Supabase - check database credentials');
-        }
+        $this->assertTrue($supabase->testConnection());
     }
 
     /**
@@ -31,14 +24,9 @@ class SupabaseConnectionTest extends TestCase
      */
     public function test_basic_database_operations(): void
     {
-        try {
-            // Test if we can execute a simple query
-            $result = \DB::select('SELECT 1 as test');
-            
-            $this->assertNotEmpty($result);
-            $this->assertEquals(1, $result[0]->test);
-        } catch (\Exception $e) {
-            $this->markTestSkipped('Database query failed: ' . $e->getMessage());
-        }
+        $result = \DB::select('SELECT 1 as test');
+
+        $this->assertNotEmpty($result);
+        $this->assertEquals(1, $result[0]->test);
     }
 }

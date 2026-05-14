@@ -9,13 +9,11 @@ class SupabaseService
 {
     private string $url;
     private string $key;
-    private ?string $dbPassword;
 
     public function __construct()
     {
-        $this->url = env('SUPABASE_URL');
-        $this->key = env('SUPABASE_ANON_KEY');
-        $this->dbPassword = env('SUPABASE_DB_PASSWORD');
+        $this->url = config('services.supabase.url') ?? '';
+        $this->key = config('services.supabase.anon_key') ?? '';
     }
 
     /**
@@ -24,11 +22,10 @@ class SupabaseService
     public function testConnection(): bool
     {
         try {
-            // Test database connection
             DB::connection()->getPdo();
             return true;
         } catch (\Exception $e) {
-            logger()->error('Supabase connection failed: ' . $e->getMessage());
+            logger()->error('Database connection failed: ' . $e->getMessage());
             return false;
         }
     }
@@ -48,20 +45,5 @@ class SupabaseService
         ])->$method($url, $data);
 
         return $response;
-    }
-
-    /**
-     * Get database connection string for direct SQL queries
-     */
-    public function getDatabaseConnectionString(): string
-    {
-        return sprintf(
-            'pgsql:host=%s;port=%s;dbname=%s;user=%s;password=%s',
-            env('DB_HOST'),
-            env('DB_PORT'),
-            env('DB_DATABASE'),
-            env('DB_USERNAME'),
-            $this->dbPassword
-        );
     }
 }

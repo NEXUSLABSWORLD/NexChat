@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -10,19 +9,24 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable(['username', 'email', 'password_hash', 'primary_language_code', 'is_online', 'last_seen_at'])]
 #[Hidden(['password_hash', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, HasApiTokens, Notifiable;
 
     /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
+     * Sanctum uses getAuthPassword() to verify passwords.
+     * Our schema stores passwords in 'password_hash' instead of 'password'.
      */
+    public function getAuthPassword(): string
+    {
+        return $this->password_hash;
+    }
+
     /**
      * Get conversations where user is participant
      */
@@ -47,8 +51,7 @@ class User extends Authenticatable
     {
         return Conversation::where('user_one_id', $this->id)
                           ->orWhere('user_two_id', $this->id)
-                          ->orderBy('last_message_at', 'desc')
-                          ->with(['userOne', 'userTwo', 'latestMessage']);
+                          ->orderBy('last_message_at', 'desc');
     }
 
     /**

@@ -2,12 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class SupabaseAuthTest extends TestCase
 {
+    use RefreshDatabase;
+
     /**
-     * Test registration endpoint exists and works
+     * Test registration endpoint creates user and returns proper structure
      */
     public function test_registration_endpoint(): void
     {
@@ -21,21 +26,17 @@ class SupabaseAuthTest extends TestCase
 
         $response = $this->postJson('/api/auth/register', $userData);
 
-        // Test that endpoint exists and returns proper structure
-        $this->assertContains($response->status(), [201, 422, 500]);
-        
-        if ($response->status() === 201) {
-            $response->assertJsonStructure([
-                'message',
-                'user' => [
-                    'id',
-                    'username',
-                    'email',
-                    'primary_language_code',
-                    'is_online',
-                ]
-            ]);
-        }
+        $response->assertStatus(201)
+                ->assertJsonStructure([
+                    'message',
+                    'user' => [
+                        'id',
+                        'username',
+                        'email',
+                        'primary_language_code',
+                        'is_online',
+                    ]
+                ]);
     }
 
     /**
@@ -58,23 +59,36 @@ class SupabaseAuthTest extends TestCase
     }
 
     /**
-     * Test that login endpoint exists
+     * Test that login endpoint works
      */
-    public function test_login_endpoint_exists(): void
+    public function test_login_endpoint(): void
     {
+        User::create([
+            'username' => 'logintest',
+            'email' => 'logintest@example.com',
+            'password_hash' => Hash::make('password123'),
+            'primary_language_code' => 'en',
+        ]);
+
         $response = $this->postJson('/api/auth/login', [
-            'email' => 'test@example.com',
+            'email' => 'logintest@example.com',
             'password' => 'password123',
         ]);
 
-        // Debug: check actual status
-        $actualStatus = $response->status();
-        if (!in_array($actualStatus, [200, 401])) {
-            echo "Login endpoint returned status: $actualStatus\n";
-            echo "Response body: " . $response->getContent() . "\n";
-        }
-        
-        // Should return either 200 (success) or 401 (invalid credentials) or 500 (server error)
-        $this->assertContains($response->status(), [200, 401, 500]);
+        $response->assertStatus(200)
+                ->assertJsonStructure(['message', 'user', 'token']);
+    }
+
+    /**
+     * Test login with wrong credentials
+     */
+    public function test_login_wrong_credentials(): void
+    {
+        $response = $this->postJson('/api/auth/login', [
+            'email' => 'nonexistent@example.com',
+            'password' => 'password123',
+        ]);
+
+        $response->assertStatus(401);
     }
 }

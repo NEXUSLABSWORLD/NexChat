@@ -3,40 +3,25 @@
 namespace App\Http\Controllers;
 
 use App\Models\Conversation;
-use App\Services\SupabaseUserService;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class ConversationController extends Controller
 {
-    private SupabaseUserService $supabaseService;
-
-    public function __construct(SupabaseUserService $supabaseService)
-    {
-        $this->supabaseService = $supabaseService;
-    }
-
     /**
-     * Get all conversations for a specific user.
-     * 
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\JsonResponse
-     * 
-     * @queryParam user_id integer Required. The ID of the authenticated user.
+     * Get all conversations for the authenticated user.
      */
     public function index(Request $request)
     {
-        $userId = $request->input('user_id');
-        
-        if (!$userId) {
-            return response()->json([
-                'message' => 'User ID required'
-            ], 400);
-        }
+        $user = $request->user();
 
         try {
-            $conversations = $this->supabaseService->getUserConversations($userId);
-            
+            $conversations = Conversation::where('user_one_id', $user->id)
+                ->orWhere('user_two_id', $user->id)
+                ->orderBy('last_message_at', 'desc')
+                ->get();
+
             return response()->json([
                 'conversations' => $conversations
             ]);
@@ -49,19 +34,14 @@ class ConversationController extends Controller
     }
 
     /**
-     * Create a new conversation or retrieve an existing one between two users.
-     * 
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\JsonResponse
-     * 
-     * @bodyParam user_id integer Required. The ID of the initiator.
-     * @bodyParam other_user_id integer Required. The ID of the participant.
+     * Create a new conversation or retrieve an existing one between the authenticated user and another.
      */
     public function store(Request $request)
     {
+        $user = $request->user();
+
         $validator = Validator::make($request->all(), [
-            'user_id' => 'required|integer',
-            'other_user_id' => 'required|integer|different:user_id',
+            'other_user_id' => 'required|integer',
         ]);
 
         if ($validator->fails()) {
@@ -71,19 +51,37 @@ class ConversationController extends Controller
             ], 422);
         }
 
+        if ($request->other_user_id == $user->id) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => ['other_user_id' => ['Cannot create conversation with yourself']]
+            ], 422);
+        }
+
         try {
-            // Check if other user exists
-            $otherUser = $this->supabaseService->findUserById($request->other_user_id);
+            $otherUser = User::find($request->other_user_id);
             if (!$otherUser) {
                 return response()->json([
                     'message' => 'Other user not found'
                 ], 404);
             }
 
-            $conversation = $this->supabaseService->getOrCreateConversation(
-                $request->user_id,
-                $request->other_user_id
-            );
+            $conversation = Conversation::where(function ($query) use ($user, $request) {
+                    $query->where('user_one_id', $user->id)
+                          ->where('user_two_id', $request->other_user_id);
+                })
+                ->orWhere(function ($query) use ($user, $request) {
+                    $query->where('user_one_id', $request->other_user_id)
+                          ->where('user_two_id', $user->id);
+                })
+                ->first();
+
+            if (!$conversation) {
+                $conversation = Conversation::create([
+                    'user_one_id' => $user->id,
+                    'user_two_id' => $request->other_user_id,
+                ]);
+            }
 
             return response()->json([
                 'message' => 'Conversation ready',
@@ -99,40 +97,27 @@ class ConversationController extends Controller
 
     /**
      * Get a specific conversation details including messages history.
-     * 
-     * @param  \Illuminate\Http\Request  $request
-     * @param  string  $conversationId
-     * @return \Illuminate\Http\JsonResponse
-     * 
-     * @queryParam user_id integer Required. The ID of the user requesting the view.
      */
     public function show(Request $request, $conversationId)
     {
-        $userId = $request->input('user_id');
-        
-        if (!$userId) {
-            return response()->json([
-                'message' => 'User ID required'
-            ], 400);
-        }
+        $user = $request->user();
 
         try {
-            $conversation = $this->supabaseService->getConversation($conversationId);
-            
+            $conversation = Conversation::find($conversationId);
+
             if (!$conversation) {
                 return response()->json([
                     'message' => 'Conversation not found'
                 ], 404);
             }
 
-            // Check if user is part of this conversation
-            if (!in_array($userId, [$conversation['user_one_id'], $conversation['user_two_id']])) {
+            if (!$conversation->hasUser($user->id)) {
                 return response()->json([
                     'message' => 'Access denied'
                 ], 403);
             }
 
-            $messages = $this->supabaseService->getConversationMessages($conversationId);
+            $messages = $conversation->messages()->orderBy('created_at', 'asc')->get();
 
             return response()->json([
                 'conversation' => $conversation,
@@ -147,41 +132,28 @@ class ConversationController extends Controller
     }
 
     /**
-     * Mark all messages as read in a specific conversation for the given user.
-     * 
-     * @param  \Illuminate\Http\Request  $request
-     * @param  string  $conversationId
-     * @return \Illuminate\Http\JsonResponse
-     * 
-     * @queryParam user_id integer Required.
+     * Mark all messages as read in a specific conversation for the authenticated user.
      */
     public function markAsRead(Request $request, $conversationId)
     {
-        $userId = $request->input('user_id');
-        
-        if (!$userId) {
-            return response()->json([
-                'message' => 'User ID required'
-            ], 400);
-        }
+        $user = $request->user();
 
         try {
-            $conversation = $this->supabaseService->getConversation($conversationId);
-            
+            $conversation = Conversation::find($conversationId);
+
             if (!$conversation) {
                 return response()->json([
                     'message' => 'Conversation not found'
                 ], 404);
             }
 
-            // Check if user is part of this conversation
-            if (!in_array($userId, [$conversation['user_one_id'], $conversation['user_two_id']])) {
+            if (!$conversation->hasUser($user->id)) {
                 return response()->json([
                     'message' => 'Access denied'
                 ], 403);
             }
 
-            $markedCount = $this->supabaseService->markConversationAsRead($conversationId, $userId);
+            $markedCount = $conversation->markAsRead($user->id);
 
             return response()->json([
                 'message' => 'Messages marked as read',
