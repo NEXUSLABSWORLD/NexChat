@@ -2,70 +2,42 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\SupabaseUserService;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class ProfileController extends Controller
 {
-    private SupabaseUserService $supabaseService;
-
-    public function __construct(SupabaseUserService $supabaseService)
-    {
-        $this->supabaseService = $supabaseService;
-    }
-
     /**
-     * Get user profile
+     * Get authenticated user's profile
      */
     public function show(Request $request)
     {
-        // In a real app, get user ID from authenticated token
-        $userId = $request->input('user_id');
-        
-        if (!$userId) {
-            return response()->json([
-                'message' => 'User ID required'
-            ], 400);
-        }
-
-        $user = $this->supabaseService->findUserById($userId);
-        
-        if (!$user) {
-            return response()->json([
-                'message' => 'User not found'
-            ], 404);
-        }
+        $user = $request->user();
 
         return response()->json([
             'user' => [
-                'id' => $user['id'],
-                'username' => $user['username'],
-                'email' => $user['email'],
-                'primary_language_code' => $user['primary_language_code'],
-                'is_online' => $user['is_online'],
-                'last_seen_at' => $user['last_seen_at'],
-                'created_at' => $user['created_at'],
+                'id' => $user->id,
+                'username' => $user->username,
+                'email' => $user->email,
+                'primary_language_code' => $user->primary_language_code,
+                'is_online' => $user->is_online,
+                'last_seen_at' => $user->last_seen_at,
+                'created_at' => $user->created_at,
             ]
         ]);
     }
 
     /**
-     * Update user profile
+     * Update authenticated user's profile
      */
     public function update(Request $request)
     {
-        $userId = $request->input('user_id');
-        
-        if (!$userId) {
-            return response()->json([
-                'message' => 'User ID required'
-            ], 400);
-        }
+        $user = $request->user();
 
         $validator = Validator::make($request->all(), [
-            'username' => 'sometimes|string|max:255',
-            'primary_language_code' => 'sometimes|string|size:2', // ex: 'fr', 'en', 'es'
+            'username' => 'sometimes|string|max:255|unique:users,username,' . $user->id,
+            'primary_language_code' => 'sometimes|string|size:2',
         ]);
 
         if ($validator->fails()) {
@@ -77,26 +49,26 @@ class ProfileController extends Controller
 
         try {
             $updateData = [];
-            
+
             if ($request->has('username')) {
                 $updateData['username'] = $request->username;
             }
-            
+
             if ($request->has('primary_language_code')) {
                 $updateData['primary_language_code'] = strtolower($request->primary_language_code);
             }
 
-            $user = $this->supabaseService->updateUser($userId, $updateData);
-            
+            $user->update($updateData);
+
             return response()->json([
                 'message' => 'Profile updated successfully',
                 'user' => [
-                    'id' => $user['id'],
-                    'username' => $user['username'],
-                    'email' => $user['email'],
-                    'primary_language_code' => $user['primary_language_code'],
-                    'is_online' => $user['is_online'],
-                    'updated_at' => $user['updated_at'],
+                    'id' => $user->id,
+                    'username' => $user->username,
+                    'email' => $user->email,
+                    'primary_language_code' => $user->primary_language_code,
+                    'is_online' => $user->is_online,
+                    'updated_at' => $user->updated_at,
                 ]
             ]);
         } catch (\Exception $e) {
@@ -124,17 +96,12 @@ class ProfileController extends Controller
         }
 
         try {
-            $users = $this->supabaseService->searchUsers($request->query('query'));
-            
+            $users = User::where('username', 'like', '%' . $request->query('query') . '%')
+                ->limit(10)
+                ->get(['id', 'username', 'primary_language_code', 'is_online']);
+
             return response()->json([
-                'users' => collect($users)->map(function ($user) {
-                    return [
-                        'id' => $user['id'],
-                        'username' => $user['username'],
-                        'primary_language_code' => $user['primary_language_code'],
-                        'is_online' => $user['is_online'],
-                    ];
-                })
+                'users' => $users
             ]);
         } catch (\Exception $e) {
             return response()->json([

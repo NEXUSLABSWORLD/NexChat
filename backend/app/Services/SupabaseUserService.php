@@ -7,18 +7,32 @@ use Illuminate\Support\Facades\Hash;
 
 class SupabaseUserService
 {
-    // private string $key; // Removed in favor of specific keys
     private string $url;
-    private string $anonKey;
     private string $serviceRoleKey;
-    private ?string $dbPassword;
 
     public function __construct()
     {
-        $this->url = env('SUPABASE_URL');
-        $this->anonKey = env('SUPABASE_ANON_KEY');
-        $this->serviceRoleKey = $this->anonKey; // Use anon key since service_role_key is not available
-        $this->dbPassword = env('SUPABASE_DB_PASSWORD');
+        $this->url = config('services.supabase.url') ?? '';
+        $this->serviceRoleKey = config('services.supabase.service_role_key')
+            ?? config('services.supabase.anon_key') ?? '';
+    }
+
+    /**
+     * Build standard headers for Supabase REST API calls
+     */
+    private function headers(bool $withPrefer = false): array
+    {
+        $headers = [
+            'apikey' => $this->serviceRoleKey,
+            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
+            'Content-Type' => 'application/json',
+        ];
+
+        if ($withPrefer) {
+            $headers['Prefer'] = 'return=representation';
+        }
+
+        return $headers;
     }
 
     /**
@@ -26,25 +40,21 @@ class SupabaseUserService
      */
     public function createUser(array $userData): array
     {
-        $response = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-            'Content-Type' => 'application/json',
-            'Prefer' => 'return=representation'
-        ])->withoutVerifying()->post($this->url . '/rest/v1/users', [
-            'username' => $userData['username'],
-            'email' => $userData['email'],
-            'password_hash' => Hash::make($userData['password']),
-            'primary_language_code' => strtolower($userData['primary_language_code']),
-            'is_online' => false,
-        ]);
+        $response = Http::withHeaders($this->headers(true))
+            ->post($this->url . '/rest/v1/users', [
+                'username' => $userData['username'],
+                'email' => $userData['email'],
+                'password_hash' => Hash::make($userData['password']),
+                'primary_language_code' => strtolower($userData['primary_language_code']),
+                'is_online' => false,
+            ]);
 
         if (!$response->successful()) {
             throw new \Exception('Failed to create user: ' . $response->body());
         }
 
         $data = $response->json();
-        return $data[0] ?? null;
+        return $data[0] ?? [];
     }
 
     /**
@@ -52,11 +62,8 @@ class SupabaseUserService
      */
     public function findUserByEmail(string $email): ?array
     {
-        $response = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-            'Content-Type' => 'application/json',
-        ])->withoutVerifying()->get($this->url . '/rest/v1/users?email=eq.' . $email);
+        $response = Http::withHeaders($this->headers())
+            ->get($this->url . '/rest/v1/users?email=eq.' . $email);
 
         if (!$response->successful() || empty($response->json())) {
             return null;
@@ -71,14 +78,11 @@ class SupabaseUserService
      */
     public function updateUserStatus(int $userId, bool $isOnline): bool
     {
-        $response = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-            'Content-Type' => 'application/json',
-        ])->withoutVerifying()->patch($this->url . '/rest/v1/users?id=eq.' . $userId, [
-            'is_online' => $isOnline,
-            'last_seen_at' => now()->toISOString(),
-        ]);
+        $response = Http::withHeaders($this->headers())
+            ->patch($this->url . '/rest/v1/users?id=eq.' . $userId, [
+                'is_online' => $isOnline,
+                'last_seen_at' => now()->toISOString(),
+            ]);
 
         return $response->successful();
     }
@@ -88,10 +92,8 @@ class SupabaseUserService
      */
     public function findUserById(int $userId): ?array
     {
-        $response = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-        ])->withoutVerifying()->get($this->url . '/rest/v1/users?id=eq.' . $userId);
+        $response = Http::withHeaders($this->headers())
+            ->get($this->url . '/rest/v1/users?id=eq.' . $userId);
 
         if (!$response->successful() || empty($response->json())) {
             return null;
@@ -106,19 +108,15 @@ class SupabaseUserService
      */
     public function updateUser(int $userId, array $data): array
     {
-        $response = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-            'Content-Type' => 'application/json',
-            'Prefer' => 'return=representation'
-        ])->withoutVerifying()->patch($this->url . '/rest/v1/users?id=eq.' . $userId, $data);
+        $response = Http::withHeaders($this->headers(true))
+            ->patch($this->url . '/rest/v1/users?id=eq.' . $userId, $data);
 
         if (!$response->successful()) {
             throw new \Exception('Failed to update user: ' . $response->body());
         }
 
         $data = $response->json();
-        return $data[0] ?? null;
+        return $data[0] ?? [];
     }
 
     /**
@@ -126,10 +124,8 @@ class SupabaseUserService
      */
     public function searchUsers(string $query): array
     {
-        $response = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-        ])->withoutVerifying()->get($this->url . '/rest/v1/users?username=ilike.*' . $query . '*&limit=10');
+        $response = Http::withHeaders($this->headers())
+            ->get($this->url . '/rest/v1/users?username=ilike.*' . $query . '*&limit=10');
 
         if (!$response->successful()) {
             throw new \Exception('Failed to search users: ' . $response->body());
@@ -143,10 +139,8 @@ class SupabaseUserService
      */
     public function getUserConversations(int $userId): array
     {
-        $response = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-        ])->withoutVerifying()->get($this->url . '/rest/v1/conversations?or=(user_one_id.eq.' . $userId . ',user_two_id.eq.' . $userId . ')&order=last_message_at.desc');
+        $response = Http::withHeaders($this->headers())
+            ->get($this->url . '/rest/v1/conversations?or=(user_one_id.eq.' . $userId . ',user_two_id.eq.' . $userId . ')&order=last_message_at.desc');
 
         if (!$response->successful()) {
             throw new \Exception('Failed to fetch conversations: ' . $response->body());
@@ -160,27 +154,19 @@ class SupabaseUserService
      */
     public function getOrCreateConversation(int $userId, int $otherUserId): array
     {
-        // First try to find existing conversation
-        $response = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-        ])->withoutVerifying()->get($this->url . '/rest/v1/conversations?or=(and(user_one_id.eq.' . $userId . ',user_two_id.eq.' . $otherUserId . '),and(user_one_id.eq.' . $otherUserId . ',user_two_id.eq.' . $userId . '))');
+        $response = Http::withHeaders($this->headers())
+            ->get($this->url . '/rest/v1/conversations?or=(and(user_one_id.eq.' . $userId . ',user_two_id.eq.' . $otherUserId . '),and(user_one_id.eq.' . $otherUserId . ',user_two_id.eq.' . $userId . '))');
 
         if ($response->successful() && !empty($response->json())) {
             $data = $response->json();
-            return $data[0] ?? null;
+            return $data[0] ?? [];
         }
 
-        // Create new conversation
-        $createResponse = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-            'Content-Type' => 'application/json',
-            'Prefer' => 'return=representation'
-        ])->withoutVerifying()->post($this->url . '/rest/v1/conversations', [
-            'user_one_id' => $userId,
-            'user_two_id' => $otherUserId,
-        ]);
+        $createResponse = Http::withHeaders($this->headers(true))
+            ->post($this->url . '/rest/v1/conversations', [
+                'user_one_id' => $userId,
+                'user_two_id' => $otherUserId,
+            ]);
 
         if (!$createResponse->successful()) {
             throw new \Exception('Failed to create conversation: ' . $createResponse->body());
@@ -194,10 +180,8 @@ class SupabaseUserService
      */
     public function getConversation(int $conversationId): ?array
     {
-        $response = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-        ])->withoutVerifying()->get($this->url . '/rest/v1/conversations?id=eq.' . $conversationId);
+        $response = Http::withHeaders($this->headers())
+            ->get($this->url . '/rest/v1/conversations?id=eq.' . $conversationId);
 
         if (!$response->successful() || empty($response->json())) {
             return null;
@@ -212,10 +196,8 @@ class SupabaseUserService
      */
     public function getConversationMessages(int $conversationId, int $limit = 50, int $offset = 0): array
     {
-        $response = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-        ])->withoutVerifying()->get($this->url . '/rest/v1/messages?conversation_id=eq.' . $conversationId . '&order=created_at.asc&limit=' . $limit . '&offset=' . $offset);
+        $response = Http::withHeaders($this->headers())
+            ->get($this->url . '/rest/v1/messages?conversation_id=eq.' . $conversationId . '&order=created_at.asc&limit=' . $limit . '&offset=' . $offset);
 
         if (!$response->successful()) {
             throw new \Exception('Failed to fetch messages: ' . $response->body());
@@ -229,19 +211,15 @@ class SupabaseUserService
      */
     public function createMessage(array $data): array
     {
-        $response = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-            'Content-Type' => 'application/json',
-            'Prefer' => 'return=representation'
-        ])->withoutVerifying()->post($this->url . '/rest/v1/messages', $data);
+        $response = Http::withHeaders($this->headers(true))
+            ->post($this->url . '/rest/v1/messages', $data);
 
         if (!$response->successful()) {
             throw new \Exception('Failed to create message: ' . $response->body());
         }
 
-        $data = $response->json();
-        return $data[0] ?? null;
+        $result = $response->json();
+        return $result[0] ?? [];
     }
 
     /**
@@ -249,10 +227,8 @@ class SupabaseUserService
      */
     public function getMessage(int $messageId): ?array
     {
-        $response = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-        ])->withoutVerifying()->get($this->url . '/rest/v1/messages?id=eq.' . $messageId);
+        $response = Http::withHeaders($this->headers())
+            ->get($this->url . '/rest/v1/messages?id=eq.' . $messageId);
 
         if (!$response->successful() || empty($response->json())) {
             return null;
@@ -267,13 +243,10 @@ class SupabaseUserService
      */
     public function markMessageAsRead(int $messageId): bool
     {
-        $response = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-            'Content-Type' => 'application/json',
-        ])->withoutVerifying()->patch($this->url . '/rest/v1/messages?id=eq.' . $messageId, [
-            'is_read' => true,
-        ]);
+        $response = Http::withHeaders($this->headers())
+            ->patch($this->url . '/rest/v1/messages?id=eq.' . $messageId, [
+                'is_read' => true,
+            ]);
 
         return $response->successful();
     }
@@ -283,19 +256,15 @@ class SupabaseUserService
      */
     public function markConversationAsRead(int $conversationId, int $userId): int
     {
-        $response = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-            'Content-Type' => 'application/json',
-        ])->withoutVerifying()->patch($this->url . '/rest/v1/messages?conversation_id=eq.' . $conversationId . '&sender_id=neq.' . $userId . '&is_read=eq.false', [
-            'is_read' => true,
-        ]);
+        $response = Http::withHeaders($this->headers())
+            ->patch($this->url . '/rest/v1/messages?conversation_id=eq.' . $conversationId . '&sender_id=neq.' . $userId . '&is_read=eq.false', [
+                'is_read' => true,
+            ]);
 
         if (!$response->successful()) {
             throw new \Exception('Failed to mark messages as read: ' . $response->body());
         }
 
-        // Return count of updated messages
         return count($response->json());
     }
 
@@ -304,13 +273,10 @@ class SupabaseUserService
      */
     public function updateConversationLastMessage(int $conversationId): bool
     {
-        $response = Http::withHeaders([
-            'apikey' => $this->serviceRoleKey,
-            'Authorization' => 'Bearer ' . $this->serviceRoleKey,
-            'Content-Type' => 'application/json',
-        ])->withoutVerifying()->patch($this->url . '/rest/v1/conversations?id=eq.' . $conversationId, [
-            'last_message_at' => now()->toISOString(),
-        ]);
+        $response = Http::withHeaders($this->headers())
+            ->patch($this->url . '/rest/v1/conversations?id=eq.' . $conversationId, [
+                'last_message_at' => now()->toISOString(),
+            ]);
 
         return $response->successful();
     }

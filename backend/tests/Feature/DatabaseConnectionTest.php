@@ -3,47 +3,67 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Foundation\Testing\WithFaker;
 use Tests\TestCase;
 
 class DatabaseConnectionTest extends TestCase
 {
+    use RefreshDatabase;
+
     /**
-     * Test Supabase API connection
+     * Test database connection works
      */
-    public function test_supabase_api_connection(): void
+    public function test_database_connection(): void
     {
-        try {
-            $supabaseUrl = env('SUPABASE_URL');
-            $supabaseKey = env('SUPABASE_ANON_KEY');
-            
-            // Test API connection by checking if we can access the auth endpoint
-            $response = \Http::withHeaders([
-                'apikey' => $supabaseKey,
-                'Authorization' => 'Bearer ' . $supabaseKey,
-            ])->withoutVerifying()->get($supabaseUrl . '/auth/v1/settings');
-            
-            // Debug information
-            if (!$response->successful()) {
-                $this->fail('Supabase API failed. Status: ' . $response->status() . ', Body: ' . $response->body());
-            }
-            
-            $this->assertTrue($response->successful(), 'Supabase API should be accessible');
-            
-        } catch (\Exception $e) {
-            $this->fail('Supabase API connection failed: ' . $e->getMessage());
-        }
+        $result = \DB::select('SELECT 1 as test');
+
+        $this->assertNotEmpty($result);
+        $this->assertEquals(1, $result[0]->test);
     }
 
     /**
-     * Test basic Laravel configuration
+     * Test that required tables exist
      */
-    public function test_laravel_configuration(): void
+    public function test_required_tables_exist(): void
     {
-        // Test that environment variables are set
-        $this->assertNotNull(env('SUPABASE_URL'), 'Supabase URL should be configured');
-        $this->assertNotNull(env('SUPABASE_ANON_KEY'), 'Supabase anon key should be configured');
-        $this->assertEquals('pgsql', env('DB_CONNECTION'), 'Database connection should be PostgreSQL');
-        $this->assertEquals('db.vxdsqgrxwyswgyhwolty.supabase.co', env('DB_HOST'), 'Database host should be Supabase');
+        $this->assertTrue(\Schema::hasTable('users'));
+        $this->assertTrue(\Schema::hasTable('conversations'));
+        $this->assertTrue(\Schema::hasTable('messages'));
+        $this->assertTrue(\Schema::hasTable('personal_access_tokens'));
+    }
+
+    /**
+     * Test users table has correct columns
+     */
+    public function test_users_table_structure(): void
+    {
+        $this->assertTrue(\Schema::hasColumns('users', [
+            'id', 'username', 'email', 'password_hash',
+            'primary_language_code', 'is_online', 'last_seen_at',
+            'created_at', 'updated_at',
+        ]));
+    }
+
+    /**
+     * Test conversations table has correct columns
+     */
+    public function test_conversations_table_structure(): void
+    {
+        $this->assertTrue(\Schema::hasColumns('conversations', [
+            'id', 'user_one_id', 'user_two_id', 'last_message_at',
+            'created_at', 'updated_at',
+        ]));
+    }
+
+    /**
+     * Test messages table has correct columns
+     */
+    public function test_messages_table_structure(): void
+    {
+        $this->assertTrue(\Schema::hasColumns('messages', [
+            'id', 'conversation_id', 'sender_id',
+            'content_original', 'content_translated',
+            'source_lang', 'target_lang', 'is_read',
+            'created_at', 'updated_at',
+        ]));
     }
 }
