@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\MessageSent;
+use App\Events\MessagesRead;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
@@ -15,29 +17,37 @@ class MessageController extends Controller
      */
     public function store(Request $request)
     {
+        \Illuminate\Support\Facades\Log::info('Message store attempt', $request->all());
         $user = $request->user();
 
         $validator = Validator::make($request->all(), [
             'conversation_id' => 'required|integer',
-            'content' => 'required|string|max:2000',
+            'content'         => 'nullable|string|max:2000',
+            'file_url'        => 'nullable|url|max:1000',
+            'file_name'       => 'nullable|string|max:255',
+            'file_type'       => 'nullable|string|max:100',
+            'file_size'       => 'nullable|integer',
         ]);
 
-        if ($validator->fails()) {
+        // Au moins content ou file_url est requis
+        if (!$request->filled('content') && !$request->filled('file_url')) {
             return response()->json([
                 'message' => 'Validation failed',
-                'errors' => $validator->errors()
+                'errors'  => ['content' => ['Un message ou un fichier est requis.']]
             ], 422);
         }
 
         try {
             $conversation = Conversation::find($request->conversation_id);
             if (!$conversation) {
+                \Illuminate\Support\Facades\Log::warning('Conversation not found', ['id' => $request->conversation_id]);
                 return response()->json([
                     'message' => 'Conversation not found'
                 ], 404);
             }
 
             if (!$conversation->hasUser($user->id)) {
+                \Illuminate\Support\Facades\Log::warning('Access denied to conversation', ['user' => $user->id, 'conv' => $conversation->id]);
                 return response()->json([
                     'message' => 'Access denied'
                 ], 403);
@@ -49,17 +59,44 @@ class MessageController extends Controller
 
             $recipient = User::find($recipientId);
 
+            $sourceLang = $user->primary_language_code ?? 'fr';
+            $targetLang = $recipient?->primary_language_code ?? 'fr';
+            $contentOriginal = $request->input('content', '');
+            $contentTranslated = null;
+
+            if ($contentOriginal && $sourceLang !== $targetLang) {
+                $translationService = app(\App\Services\TranslationService::class);
+                $translated = $translationService->translate($contentOriginal, $targetLang, $sourceLang);
+                if ($translated) {
+                    $contentTranslated = $translated['text'];
+                    // Increment the user's translated words count
+                    $wordsCount = str_word_count($contentOriginal);
+                    $user->increment('ai_words_translated_count', $wordsCount);
+                }
+            }
+
             $message = Message::create([
-                'conversation_id' => $request->conversation_id,
-                'sender_id' => $user->id,
-                'content_original' => $request->content,
-                'content_translated' => null,
-                'source_lang' => $user->primary_language_code,
-                'target_lang' => $recipient->primary_language_code,
-                'is_read' => false,
+                'conversation_id'   => $request->conversation_id,
+                'sender_id'         => $user->id,
+                'content_original'  => $contentOriginal,
+                'content_translated'=> $contentTranslated,
+                'source_lang'       => $sourceLang,
+                'target_lang'       => $targetLang,
+                'is_read'           => false,
+                'file_url'          => $request->input('file_url'),
+                'file_name'         => $request->input('file_name'),
+                'file_type'         => $request->input('file_type'),
+                'file_size'         => $request->input('file_size'),
             ]);
 
             $conversation->update(['last_message_at' => now()]);
+
+            // Diffuser l'événement en temps réel via Reverb
+            try {
+                broadcast(new MessageSent($message, $conversation->id));
+            } catch (\Exception $broadcastErr) {
+                \Illuminate\Support\Facades\Log::warning('Broadcast failed (Reverb may be down): ' . $broadcastErr->getMessage());
+            }
 
             return response()->json([
                 'message' => 'Message sent successfully',
@@ -67,6 +104,7 @@ class MessageController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Message store failed: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json([
                 'message' => 'Failed to send message',
                 'error' => $e->getMessage()
@@ -109,18 +147,12 @@ class MessageController extends Controller
             }
 
             $limit = $request->input('limit', 50);
-            $offset = $request->input('offset', 0);
 
             $messages = $conversation->messages()
                 ->orderBy('created_at', 'asc')
-                ->skip($offset)
-                ->take($limit)
-                ->get();
+                ->paginate($limit);
 
-            return response()->json([
-                'messages' => $messages,
-                'total' => count($messages)
-            ]);
+            return response()->json($messages);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -161,6 +193,12 @@ class MessageController extends Controller
 
             $message->markAsRead();
 
+            try {
+                broadcast(new MessagesRead($conversation->id, $user->id));
+            } catch (\Exception $broadcastErr) {
+                \Illuminate\Support\Facades\Log::warning('Broadcast failed: ' . $broadcastErr->getMessage());
+            }
+
             return response()->json([
                 'message' => 'Message marked as read',
                 'updated' => true
@@ -171,6 +209,58 @@ class MessageController extends Controller
                 'message' => 'Failed to mark message as read',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+    /**
+     * Delete a message for everyone.
+     */
+    public function destroy(Request $request, $id)
+    {
+        $user = $request->user();
+        try {
+            $message = Message::findOrFail($id);
+
+            if ($message->sender_id !== $user->id) {
+                return response()->json(['message' => 'Access denied'], 403);
+            }
+
+            $message->update([
+                'content_original' => 'Ce message a été supprimé',
+                'content_translated' => 'This message was deleted',
+                'is_deleted' => true
+            ]);
+
+            // Broadcast message update
+            try {
+                broadcast(new MessageSent($message, $message->conversation_id));
+            } catch (\Exception $broadcastErr) {
+                \Illuminate\Support\Facades\Log::warning('Broadcast failed: ' . $broadcastErr->getMessage());
+            }
+
+            return response()->json(['message' => 'Message deleted for everyone', 'data' => $message]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Failed to delete', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Archive a message.
+     */
+    public function archive(Request $request, $id)
+    {
+        $user = $request->user();
+        try {
+            $message = Message::findOrFail($id);
+
+            if ($message->sender_id !== $user->id) {
+                return response()->json(['message' => 'Access denied'], 403);
+            }
+
+            $message->update(['is_archived' => true]);
+
+            return response()->json(['message' => 'Message archived', 'data' => $message]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Failed to archive', 'error' => $e->getMessage()], 500);
         }
     }
 }

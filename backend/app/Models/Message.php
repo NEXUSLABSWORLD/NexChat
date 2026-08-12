@@ -2,17 +2,44 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
-#[Fillable(['conversation_id', 'sender_id', 'content_original', 'content_translated', 'source_lang', 'target_lang', 'is_read'])]
-#[Hidden(['updated_at'])]
 class Message extends Model
 {
     use HasFactory;
+
+    protected $fillable = [
+        'conversation_id', 
+        'sender_id', 
+        'content_original', 
+        'content_translated', 
+        'source_lang', 
+        'target_lang', 
+        'is_read', 
+        'is_archived', 
+        'is_deleted',
+        'file_url',
+        'file_name',
+        'file_type',
+        'file_size',
+    ];
+
+    protected $hidden = ['updated_at'];
+
+    protected function casts(): array
+    {
+        return [
+            'conversation_id' => 'integer',
+            'sender_id' => 'integer',
+            'is_read' => 'boolean',
+            'is_archived' => 'boolean',
+            'is_deleted' => 'boolean',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+        ];
+    }
 
     /**
      * Get the conversation that owns the message

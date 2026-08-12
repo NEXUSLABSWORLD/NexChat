@@ -10,6 +10,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['user_one_id', 'user_two_id', 'last_message_at'])]
 class Conversation extends Model
 {
+    protected function casts(): array
+    {
+        return [
+            'user_one_id' => 'integer',
+            'user_two_id' => 'integer',
+            'last_message_at' => 'datetime',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+        ];
+    }
+
     /**
      * Get the messages for the conversation
      */
@@ -62,6 +73,14 @@ class Conversation extends Model
     public function latestMessage(): ?Message
     {
         return $this->messages()->latest()->first();
+    }
+
+    /**
+     * Get the latest message relation for eager loading
+     */
+    public function latestMessageRel(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Message::class)->latestOfMany();
     }
 
     /**

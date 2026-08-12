@@ -42,4 +42,13 @@ return [
         'db_password' => env('SUPABASE_DB_PASSWORD'),
     ],
 
+    'deepl' => [
+        'key' => env('DEEPL_API_KEY'),
+        'url' => env('DEEPL_API_URL'),
+    ],
+
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+    ],
+
 ];

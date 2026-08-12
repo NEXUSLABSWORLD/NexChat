@@ -8,10 +8,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
+use App\Mail\LoginVerificationMail;
+
 class RegisterController extends Controller
 {
     /**
-     * Register a new user
+     * Register a new user and send verification email
      */
     public function register(Request $request)
     {
@@ -30,16 +35,27 @@ class RegisterController extends Controller
         }
 
         try {
+            $tokenStr = Str::random(32);
+
             $user = User::create([
                 'username' => $request->username,
                 'email' => $request->email,
                 'password_hash' => Hash::make($request->password),
                 'primary_language_code' => strtolower($request->primary_language_code),
                 'is_online' => false,
+                'login_token' => hash('sha256', $tokenStr),
+                'login_token_expires_at' => now()->addMinutes(15),
             ]);
 
+            try {
+                Mail::to($user->email)->send(new LoginVerificationMail($user, $tokenStr));
+            } catch (\Exception $mailEx) {
+                Log::error("Failed to send validation email during registration: " . $mailEx->getMessage());
+            }
+
             return response()->json([
-                'message' => 'User registered successfully',
+                'message' => 'verification_required',
+                'email' => $user->email,
                 'user' => [
                     'id' => $user->id,
                     'username' => $user->username,

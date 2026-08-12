@@ -11,8 +11,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['username', 'email', 'password_hash', 'primary_language_code', 'is_online', 'last_seen_at'])]
-#[Hidden(['password_hash', 'remember_token'])]
+#[Fillable(['username', 'email', 'password_hash', 'primary_language_code', 'is_online', 'last_seen_at', 'login_token', 'login_token_expires_at', 'email_verified_at', 'avatar_url', 'bio', 'ai_proactive_translation', 'ai_translation_formality', 'ai_words_translated_count', 'subscription_tier'])]
+#[Hidden(['password_hash', 'remember_token', 'login_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -42,6 +42,14 @@ class User extends Authenticatable
     public function sentMessages(): HasMany
     {
         return $this->hasMany(Message::class, 'sender_id');
+    }
+
+    /**
+     * Get saved AI phrases
+     */
+    public function aiSavedPhrases(): HasMany
+    {
+        return $this->hasMany(AiSavedPhrase::class, 'user_id');
     }
 
     /**

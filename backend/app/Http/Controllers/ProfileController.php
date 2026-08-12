@@ -21,6 +21,8 @@ class ProfileController extends Controller
                 'username' => $user->username,
                 'email' => $user->email,
                 'primary_language_code' => $user->primary_language_code,
+                'avatar_url' => $user->avatar_url,
+                'bio' => $user->bio,
                 'is_online' => $user->is_online,
                 'last_seen_at' => $user->last_seen_at,
                 'created_at' => $user->created_at,
@@ -38,6 +40,8 @@ class ProfileController extends Controller
         $validator = Validator::make($request->all(), [
             'username' => 'sometimes|string|max:255|unique:users,username,' . $user->id,
             'primary_language_code' => 'sometimes|string|size:2',
+            'avatar_url' => 'sometimes|nullable|url|max:1000',
+            'bio' => 'sometimes|nullable|string|max:500',
         ]);
 
         if ($validator->fails()) {
@@ -58,6 +62,14 @@ class ProfileController extends Controller
                 $updateData['primary_language_code'] = strtolower($request->primary_language_code);
             }
 
+            if ($request->has('avatar_url')) {
+                $updateData['avatar_url'] = $request->avatar_url;
+            }
+
+            if ($request->has('bio')) {
+                $updateData['bio'] = $request->bio;
+            }
+
             $user->update($updateData);
 
             return response()->json([
@@ -67,6 +79,8 @@ class ProfileController extends Controller
                     'username' => $user->username,
                     'email' => $user->email,
                     'primary_language_code' => $user->primary_language_code,
+                    'avatar_url' => $user->avatar_url,
+                    'bio' => $user->bio,
                     'is_online' => $user->is_online,
                     'updated_at' => $user->updated_at,
                 ]
@@ -97,6 +111,7 @@ class ProfileController extends Controller
 
         try {
             $users = User::where('username', 'like', '%' . $request->query('query') . '%')
+                ->where('id', '!=', $request->user()->id)
                 ->limit(10)
                 ->get(['id', 'username', 'primary_language_code', 'is_online']);
 
@@ -109,5 +124,40 @@ class ProfileController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Update authenticated user's password
+     */
+    public function updatePassword(Request $request)
+    {
+        $user = $request->user();
+
+        $validator = Validator::make($request->all(), [
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8|confirmed',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        if (!\Illuminate\Support\Facades\Hash::check($request->current_password, $user->password)) {
+            return response()->json([
+                'message' => 'Current password incorrect',
+                'errors' => ['current_password' => ['Le mot de passe actuel est incorrect.']]
+            ], 422);
+        }
+
+        $user->update([
+            'password' => \Illuminate\Support\Facades\Hash::make($request->new_password)
+        ]);
+
+        return response()->json([
+            'message' => 'Password updated successfully'
+        ]);
     }
 }

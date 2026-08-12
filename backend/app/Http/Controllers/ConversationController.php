@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Conversation;
 use App\Models\User;
+use App\Events\MessagesRead;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -17,10 +18,33 @@ class ConversationController extends Controller
         $user = $request->user();
 
         try {
-            $conversations = Conversation::where('user_one_id', $user->id)
+            $conversations = Conversation::with(['userOne', 'userTwo', 'latestMessageRel'])
+                ->withCount(['messages as unread_count' => function ($query) use ($user) {
+                    $query->where('sender_id', '!=', $user->id)
+                          ->where('is_read', false);
+                }])
+                ->where('user_one_id', $user->id)
                 ->orWhere('user_two_id', $user->id)
                 ->orderBy('last_message_at', 'desc')
-                ->get();
+                ->get()
+                ->map(function ($conversation) use ($user) {
+                    $otherUser = $conversation->getOtherUser($user->id);
+                    return [
+                        'id' => $conversation->id,
+                        'other_user' => [
+                            'id' => $otherUser->id,
+                            'username' => $otherUser->username,
+                            'primary_language_code' => $otherUser->primary_language_code,
+                            'avatar_url' => $otherUser->avatar_url,
+                            'is_online' => $otherUser->is_online,
+                            'last_seen_at' => $otherUser->last_seen_at,
+                        ],
+                        'latest_message' => $conversation->latestMessageRel,
+                        'unread_count' => $conversation->unread_count,
+                        'last_message_at' => $conversation->last_message_at,
+                        'created_at' => $conversation->created_at,
+                    ];
+                });
 
             return response()->json([
                 'conversations' => $conversations
@@ -83,9 +107,30 @@ class ConversationController extends Controller
                 ]);
             }
 
+            // Load relations for the response
+            $conversation->load(['userOne', 'userTwo', 'latestMessageRel']);
+            $conversation->loadCount(['messages as unread_count' => function ($query) use ($user) {
+                $query->where('sender_id', '!=', $user->id)->where('is_read', false);
+            }]);
+            $otherUser = $conversation->getOtherUser($user->id);
+
             return response()->json([
                 'message' => 'Conversation ready',
-                'conversation' => $conversation
+                'conversation' => [
+                    'id' => $conversation->id,
+                    'other_user' => [
+                        'id' => $otherUser->id,
+                        'username' => $otherUser->username,
+                        'primary_language_code' => $otherUser->primary_language_code,
+                        'avatar_url' => $otherUser->avatar_url,
+                        'is_online' => $otherUser->is_online,
+                        'last_seen_at' => $otherUser->last_seen_at,
+                    ],
+                    'latest_message' => $conversation->latestMessageRel,
+                    'unread_count' => $conversation->unread_count,
+                    'last_message_at' => $conversation->last_message_at,
+                    'created_at' => $conversation->created_at,
+                ]
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
@@ -154,6 +199,14 @@ class ConversationController extends Controller
             }
 
             $markedCount = $conversation->markAsRead($user->id);
+
+            if ($markedCount > 0) {
+                try {
+                    broadcast(new MessagesRead($conversation->id, $user->id));
+                } catch (\Exception $broadcastErr) {
+                    \Illuminate\Support\Facades\Log::warning('Broadcast failed: ' . $broadcastErr->getMessage());
+                }
+            }
 
             return response()->json([
                 'message' => 'Messages marked as read',
