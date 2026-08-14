@@ -14,11 +14,12 @@ Contrairement aux applications classiques, LinguChat traduit les messages dans l
 - **Historique de Traduction** : Stockage des versions originales et traduites en base de données.
 
 ## 🛠 Stack Technologique
-- **Frontend** : React.js (Vite)
-- **Backend** : Node.js (Express)
-- **Temps Réel** : Socket.io
-- **Base de Données** : PostgreSQL / MongoDB
-- **IA/Traduction** : API DeepL / Google Translate / LibreTranslate
+- **Frontend** : React.js (Vite, Tailwind CSS v4)
+- **Backend** : PHP 8.2+ (Laravel 11)
+- **Temps Réel** : Laravel Reverb (WebSockets)
+- **Base de Données** : PostgreSQL via Supabase Cloud
+- **IA/Traduction** : API DeepL / MyMemory / Google Translate / Generative AI Service
+
 
 ## 📊 Modèle de Données
 ### Utilisateurs (Users)
