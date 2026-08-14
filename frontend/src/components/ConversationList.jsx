@@ -191,6 +191,7 @@ export default function ConversationList({
               </div>
             </div>
           );
+        })}
         {remoteResults && remoteResults.length > 0 && (
           <div style={{ marginTop: '16px' }} aria-label="Résultats de recherche API">
             <p style={{ padding: '0 20px 8px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Suggestions</p>
