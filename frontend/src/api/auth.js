@@ -44,3 +44,14 @@ export function logout({ user_id }) {
     .post('/auth/logout', { user_id })
     .then((response) => response.data)
 }
+
+/**
+ * Verify Login OTP.
+ * Backend: POST /api/auth/login/verify
+ * Reponse: { message, user, token }
+ */
+export function verifyLogin({ email, token }) {
+  return apiClient
+    .post('/auth/login/verify', { email, token })
+    .then((response) => response.data)
+}

@@ -45,4 +45,19 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
+// Si le backend répond 401, le token est expiré ou invalide → déconnexion forcée
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const url = error?.config?.url || ''
+    const isAuthRoute = url.includes('/auth/logout') || url.includes('/auth/login')
+    if (error?.response?.status === 401 && !isAuthRoute) {
+      localStorage.removeItem('nexchat_token')
+      localStorage.removeItem('nexchat_user')
+      window.location.reload()
+    }
+    return Promise.reject(error)
+  }
+)
+
 export default apiClient
