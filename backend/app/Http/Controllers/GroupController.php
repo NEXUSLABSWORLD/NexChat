@@ -7,6 +7,7 @@ use App\Models\GroupMember;
 use App\Models\GroupMessage;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class GroupController extends Controller
@@ -137,20 +138,31 @@ class GroupController extends Controller
             $userLang = $user->primary_language_code ?? 'fr';
 
             $messages = GroupMessage::where('group_id', $groupId)
-                ->with('sender')
+                ->with(['sender', 'translations'])
                 ->orderBy('created_at', 'asc')
                 ->get()
                 ->map(function ($msg) use ($userLang) {
                     if ($msg->source_lang === $userLang) {
-                        // No translation needed if user speaks the original language
                         $msg->content_translated = null;
-                    } elseif ($msg->target_lang !== $userLang) {
-                        // Translate on-the-fly if the stored target language doesn't match the current user
+                    } else {
+                        $cachedTranslation = $msg->translations
+                            ->firstWhere('language_code', $userLang);
+
+                        if ($cachedTranslation) {
+                            $msg->setAttribute('content_translated', $cachedTranslation->translated_content);
+                            $msg->setAttribute('target_lang', $userLang);
+                            return $msg;
+                        }
+
                         $translationService = app(\App\Services\TranslationService::class);
                         $translated = $translationService->translate($msg->content_original, $userLang, $msg->source_lang);
                         if ($translated) {
-                            $msg->content_translated = $translated['text'];
-                            $msg->target_lang = $userLang;
+                            $msg->setAttribute('content_translated', $translated['text']);
+                            $msg->setAttribute('target_lang', $userLang);
+                            $msg->translations()->updateOrCreate(
+                                ['language_code' => $userLang],
+                                ['translated_content' => $translated['text']]
+                            );
                         }
                     }
                     return $msg;
@@ -339,45 +351,60 @@ class GroupController extends Controller
 
             $sourceLang = $user->primary_language_code ?? 'fr';
             
-            // Find other languages in the group
-            $otherLanguages = GroupMember::where('group_id', $groupId)
+            $targetLanguages = GroupMember::where('group_id', $groupId)
                 ->join('users', 'group_members.user_id', '=', 'users.id')
-                ->where('users.id', '!=', $user->id)
                 ->pluck('users.primary_language_code')
                 ->unique()
                 ->filter()
                 ->toArray();
 
-            $targetLang = $sourceLang;
-            $contentTranslated = null;
-
-            if (!empty($otherLanguages)) {
-                $targetLang = $otherLanguages[0];
-                $translationService = app(\App\Services\TranslationService::class);
-                $translated = $translationService->translate($request->content_original, $targetLang, $sourceLang);
-                if ($translated) {
-                    $contentTranslated = $translated['text'];
-                }
-            }
-
             $message = GroupMessage::create([
                 'group_id' => $groupId,
                 'sender_id' => $user->id,
                 'content_original' => $request->content_original,
-                'content_translated' => $contentTranslated,
+                'content_translated' => null,
                 'source_lang' => $sourceLang,
-                'target_lang' => $targetLang,
+                'target_lang' => $sourceLang,
             ]);
 
+            $translations = [];
+            foreach ($targetLanguages as $targetLang) {
+                if ($targetLang === $sourceLang) {
+                    continue;
+                }
+
+                $translationService = app(\App\Services\TranslationService::class);
+                $translated = $translationService->translate($request->content_original, $targetLang, $sourceLang);
+                if ($translated) {
+                    $translations[] = [
+                        'language_code' => $targetLang,
+                        'translated_content' => $translated['text'],
+                    ];
+                }
+            }
+
+            if ($translations !== []) {
+                $message->translations()->createMany($translations);
+                $firstTranslation = $translations[0];
+                $message->update([
+                    'content_translated' => $firstTranslation['translated_content'],
+                    'target_lang' => $firstTranslation['language_code'],
+                ]);
+                $user->increment(
+                    'ai_words_translated_count',
+                    str_word_count($request->content_original) * count($translations)
+                );
+            }
+
             try {
-                broadcast(new \App\Events\GroupMessageSent($message->load('sender')))->toOthers();
+                broadcast(new \App\Events\GroupMessageSent($message->load(['sender', 'translations'])))->toOthers();
             } catch (\Exception $broadcastErr) {
-                \Illuminate\Support\Facades\Log::warning('Broadcast failed: ' . $broadcastErr->getMessage());
+                Log::warning('Broadcast failed: ' . $broadcastErr->getMessage());
             }
 
             return response()->json([
                 'message' => 'Message sent successfully',
-                'group_message' => $message->load('sender')
+                'group_message' => $message->load(['sender', 'translations'])
             ], 201);
         } catch (\Exception $e) {
             return response()->json([

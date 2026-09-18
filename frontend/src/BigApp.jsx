@@ -40,7 +40,7 @@ import { login as apiLogin, logout as apiLogout, register as apiRegister, verify
 import { searchUsers as apiSearchUsers, updateProfile as apiUpdateProfile, getProfile as apiGetProfile, updatePassword as apiUpdatePassword } from './api/profile'
 import { getConversations as apiGetConversations, startConversation as apiStartConversation, markConversationAsRead as apiMarkConversationAsRead } from './api/conversations'
 import { sendMessage as apiSendMessage, getMessages as apiGetMessages, deleteMessage as apiDeleteMessage, archiveMessage as apiArchiveMessage } from './api/messages'
-import { getContacts as apiGetContacts, toggleContact as apiToggleContact, getBlockedUsers as apiGetBlockedUsers, toggleBlock as apiToggleBlock, reportUser as apiReportUser } from './api/moderation'
+import { getContacts as apiGetContacts, toggleContact as apiToggleContact, addContactByEmail as apiAddContactByEmail, getBlockedUsers as apiGetBlockedUsers, toggleBlock as apiToggleBlock, reportUser as apiReportUser } from './api/moderation'
 import Feed from './components/Feed'
 import AiDashboard from './components/AiDashboard'
 import GroupModal from './components/GroupModal'
@@ -53,6 +53,7 @@ import ProfileModal from './components/ProfileModal'
 import ProfilePopover from './components/ProfilePopover'
 import Navbar from './components/Navbar'
 import ConversationList from './components/ConversationList'
+import CallPanel from './components/CallPanel'
 import { getEcho, disconnectEcho } from './api/echo'
 
 import apiClient, { clearSession, getStoredToken, getStoredUser, storeSession } from './api/client'
@@ -793,11 +794,24 @@ function App() {
 
       channel.listen('.group.message.sent', (event) => {
         const incomingMsg = event.groupMessage
+        const userLanguage = profile.primary_language_code || 'fr'
+        const cachedTranslation = incomingMsg.translations?.find(
+          (translation) => translation.language_code === userLanguage,
+        )
+        const localizedMsg = incomingMsg.source_lang === userLanguage
+          ? { ...incomingMsg, content_translated: null }
+          : cachedTranslation
+            ? {
+                ...incomingMsg,
+                content_translated: cachedTranslation.translated_content,
+                target_lang: userLanguage,
+              }
+            : incomingMsg
         
         setMessages((prev) => {
-          const index = prev.findIndex((m) => m.id === incomingMsg.id)
+          const index = prev.findIndex((m) => m.id === localizedMsg.id)
           if (index !== -1) return prev
-          return [...prev, incomingMsg]
+          return [...prev, localizedMsg]
         })
       })
     }
@@ -806,7 +820,7 @@ function App() {
       if (activeConversationId) echo.leave(`conversation.${activeConversationId}`)
       if (activeGroupId) echo.leave(`group.${activeGroupId}`)
     }
-  }, [activeConversationId, activeGroupId, isAuthenticated, profile.id])
+  }, [activeConversationId, activeGroupId, isAuthenticated, profile.id, profile.primary_language_code])
 
   // Écouter TOUTES les conversations en arrière-plan pour les notifications globales et les Wizz
   useEffect(() => {
@@ -1151,6 +1165,17 @@ function App() {
       setRemoteResults([])
       setMobileSidebarOpen(false)
     } catch {}
+  }
+
+  const handleAddContactByEmail = async (email) => {
+    const normalizedEmail = email.trim()
+    if (!normalizedEmail) return
+
+    const result = await apiAddContactByEmail(normalizedEmail)
+    const contactId = result.contact?.id
+    if (contactId && !contacts.includes(contactId)) {
+      setContacts((current) => [...current, contactId])
+    }
   }
 
   const handleMessageContextMenu = (e, messageId) => {
@@ -1782,6 +1807,7 @@ function App() {
         formatTime={formatTime}
         remoteResults={remoteResults}
         handleStartConversation={handleStartConversation}
+        onAddContactByEmail={handleAddContactByEmail}
       />
 
 
@@ -2140,6 +2166,16 @@ function App() {
               >
                 <Sparkles size={16} /> Résumer (IA)
               </button>
+            )}
+            {(activeConversation || activeGroup) && (
+              <CallPanel
+                profile={profile}
+                conversationId={activeConversationId}
+                groupId={activeGroupId}
+                participantIds={activeConversation
+                  ? [activeConversation.other_user?.id]
+                  : (activeGroupDetails?.members || []).map((member) => member.user_id)}
+              />
             )}
             <button 
               style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} 

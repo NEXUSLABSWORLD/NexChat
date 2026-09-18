@@ -1,5 +1,5 @@
 import React from 'react'
-import { Users, ChevronDown, Search } from 'lucide-react'
+import { Users, ChevronDown, Search, MailPlus } from 'lucide-react'
 import StoriesTray from './StoriesTray'
 
 export default function ConversationList({
@@ -28,8 +28,12 @@ export default function ConversationList({
   setConvContextMenu,
   formatTime,
   remoteResults = [],
-  handleStartConversation
+  handleStartConversation,
+  onAddContactByEmail
 }) {
+  const [contactEmail, setContactEmail] = React.useState('')
+  const [contactError, setContactError] = React.useState('')
+  const [contactSubmitting, setContactSubmitting] = React.useState(false)
   const safeFormatTime = typeof formatTime === 'function' ? formatTime : (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
   return (
     <aside className={`sidebar ${mobileSidebarOpen ? 'open' : ''} ${sidebarCollapsed ? 'collapsed' : ''} ${sidebarMode === 'compact' ? 'compact' : ''}`}>
@@ -120,6 +124,41 @@ export default function ConversationList({
             placeholder="Rechercher..."
           />
         </div>
+        <form
+          onSubmit={async (event) => {
+            event.preventDefault()
+            setContactError('')
+            setContactSubmitting(true)
+            try {
+              await onAddContactByEmail(contactEmail)
+              setContactEmail('')
+            } catch (error) {
+              setContactError(error?.response?.data?.message || 'Impossible d’ajouter ce contact.')
+            } finally {
+              setContactSubmitting(false)
+            }
+          }}
+          style={{ display: 'flex', gap: '6px', marginTop: '8px' }}
+        >
+          <input
+            type="email"
+            value={contactEmail}
+            onChange={(event) => setContactEmail(event.target.value)}
+            placeholder="E-mail du contact"
+            aria-label="Adresse e-mail du contact"
+            style={{ minWidth: 0, flex: 1, background: 'var(--bg-panel)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '8px', padding: '8px 10px', fontSize: '0.8rem' }}
+          />
+          <button
+            type="submit"
+            disabled={contactSubmitting || !contactEmail.trim()}
+            title="Ajouter ce contact"
+            aria-label="Ajouter ce contact"
+            style={{ background: 'var(--primary-color)', color: 'white', border: 'none', borderRadius: '8px', padding: '0 10px', cursor: contactSubmitting ? 'wait' : 'pointer', opacity: contactSubmitting || !contactEmail.trim() ? 0.5 : 1 }}
+          >
+            <MailPlus size={16} />
+          </button>
+        </form>
+        {contactError && <p style={{ color: '#ff8a8a', fontSize: '0.75rem', margin: '6px 2px 0' }}>{contactError}</p>}
       </div>
 
       <div className="conversations-list" aria-label="Conversations">
@@ -225,4 +264,3 @@ export default function ConversationList({
     </aside>
   )
 }
-

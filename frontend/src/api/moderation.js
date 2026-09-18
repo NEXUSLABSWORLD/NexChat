@@ -10,6 +10,11 @@ export const toggleContact = async (contactId) => {
   return data
 }
 
+export const addContactByEmail = async (email) => {
+  const { data } = await apiClient.post('/moderation/contacts/by-email', { email })
+  return data
+}
+
 export const getBlockedUsers = async () => {
   const { data } = await apiClient.get('/moderation/blocks')
   return data // array of user IDs

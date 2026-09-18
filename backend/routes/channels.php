@@ -20,3 +20,9 @@ Broadcast::channel('conversation.{conversationId}', function ($user, $conversati
 
     return $conversation->hasUser($user->id);
 });
+
+Broadcast::channel('group.{groupId}', function ($user, $groupId) {
+    return \App\Models\GroupMember::where('group_id', $groupId)
+        ->where('user_id', $user->id)
+        ->exists();
+});

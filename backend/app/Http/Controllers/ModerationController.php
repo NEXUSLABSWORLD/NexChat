@@ -47,6 +47,48 @@ class ModerationController extends Controller
         }
     }
 
+    public function addContactByEmail(Request $request)
+    {
+        $request->merge(['email' => trim((string) $request->input('email'))]);
+        $validated = $request->validate([
+            'email' => 'required|email|max:255',
+        ]);
+
+        $user = $request->user();
+        $contact = User::whereRaw('LOWER(email) = ?', [strtolower($validated['email'])])->first();
+
+        if (!$contact) {
+            return response()->json([
+                'message' => 'Aucun utilisateur ne correspond à cette adresse e-mail.',
+            ], 404);
+        }
+
+        if ($contact->id === $user->id) {
+            return response()->json([
+                'message' => 'Vous ne pouvez pas vous ajouter vous-même.',
+            ], 422);
+        }
+
+        $wasAdded = !DB::table('user_contacts')
+            ->where('user_id', $user->id)
+            ->where('contact_id', $contact->id)
+            ->exists();
+
+        if ($wasAdded) {
+            DB::table('user_contacts')->insert([
+                'user_id' => $user->id,
+                'contact_id' => $contact->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return response()->json([
+            'status' => $wasAdded ? 'added' : 'already_added',
+            'contact' => $contact->only(['id', 'username', 'email', 'primary_language_code', 'is_online']),
+        ], $wasAdded ? 201 : 200);
+    }
+
     // Blocks
     public function getBlockedUsers(Request $request)
     {

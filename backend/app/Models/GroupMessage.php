@@ -20,4 +20,9 @@ class GroupMessage extends Model
     {
         return $this->belongsTo(User::class, 'sender_id');
     }
+
+    public function translations()
+    {
+        return $this->hasMany(GroupMessageTranslation::class);
+    }
 }

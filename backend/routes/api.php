@@ -8,6 +8,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\AiFeatureController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\CallController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -75,6 +76,8 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('/{id}/archive', [MessageController::class, 'archive']);
     });
 
+    Route::post('/calls/signal', [CallController::class, 'signal']);
+
     // Authenticated user info
     Route::get('/user', function (\Illuminate\Http\Request $request) {
         return $request->user();
@@ -89,6 +92,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::prefix('moderation')->group(function () {
         Route::get('/contacts', [\App\Http\Controllers\ModerationController::class, 'getContacts']);
         Route::post('/contacts/toggle', [\App\Http\Controllers\ModerationController::class, 'toggleContact']);
+        Route::post('/contacts/by-email', [\App\Http\Controllers\ModerationController::class, 'addContactByEmail']);
         Route::get('/blocks', [\App\Http\Controllers\ModerationController::class, 'getBlockedUsers']);
         Route::post('/blocks/toggle', [\App\Http\Controllers\ModerationController::class, 'toggleBlock']);
         Route::post('/report', [\App\Http\Controllers\ModerationController::class, 'reportUser']);
