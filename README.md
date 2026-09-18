@@ -43,7 +43,7 @@ Contrairement aux applications classiques où l'utilisateur doit manuellement tr
 - **Icônes** : Lucide React
 
 ### Backend & Infrastructure
-- **Framework** : Laravel 11 (PHP 8.4)
+- **Framework** : Laravel 13 (PHP 8.3+ ; PHP 8.4 recommandé)
 - **Base de Données** : PostgreSQL via **Supabase Cloud** (avec politiques de sécurité Row-Level Security durcies)
 - **Serveur WebSockets** : **Laravel Reverb** (haute performance, natif PHP)
 - **Paiements** : **NotchPay API** (initialisation, vérification et webhooks)
@@ -53,21 +53,49 @@ Contrairement aux applications classiques où l'utilisateur doit manuellement tr
 
 ## 🏃 Démarrage Rapide
 
-### 1. Backend (Laravel)
+### Prérequis
+
+- PHP 8.3 ou supérieur avec Composer
+- Node.js 24 ou supérieur avec npm
+- Une configuration Supabase et les services tiers nécessaires pour les fonctionnalités concernées
+
+### 1. Préparer le backend
 ```bash
 cd backend
+composer install
+copy .env.example .env       # Windows
+# cp .env.example .env       # macOS/Linux
+php artisan key:generate
 php artisan serve --port=8000
 # Dans un autre terminal :
 php artisan reverb:start --port=8080
 ```
 
-### 2. Frontend (React + Vite)
+Renseigner ensuite les variables Supabase, IA, paiement et messagerie dans `backend/.env` selon l'environnement. Ne jamais versionner ce fichier.
+
+### 2. Préparer le frontend (React + Vite)
 ```bash
-cd frontend/frontend
+cd frontend
+npm ci
 npm run dev
 ```
 
 L'application est accessible sur `http://localhost:5173`.
+
+Le frontend utilise `frontend/.env.example` comme modèle. Copier ce fichier en `frontend/.env` et adapter `VITE_API_URL` si nécessaire. Ne jamais versionner ce fichier.
+
+### 3. Vérifications
+
+```bash
+cd backend
+php artisan route:list --path=api
+php artisan test
+
+cd ../frontend
+npm run build
+```
+
+Les tests Supabase distants sont opt-in et nécessitent `TEST_SUPABASE_CONNECTION=true`.
 
 ---
 
