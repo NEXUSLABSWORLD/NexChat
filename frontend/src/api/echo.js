@@ -12,13 +12,17 @@ let echoInstance = null
 export function getEcho() {
   if (echoInstance) return echoInstance
 
+  const wsHost = import.meta.env.VITE_REVERB_HOST || '127.0.0.1'
+  const wsPort = Number(import.meta.env.VITE_REVERB_PORT || 8080)
+  const forceTLS = (import.meta.env.VITE_REVERB_SCHEME || 'http') === 'https'
+
   echoInstance = new Echo({
     broadcaster: 'reverb',
     key: import.meta.env.VITE_REVERB_APP_KEY,
-    wsHost: import.meta.env.VITE_REVERB_HOST ?? 'localhost',
-    wsPort: import.meta.env.VITE_REVERB_PORT ?? 8080,
-    wssPort: import.meta.env.VITE_REVERB_PORT ?? 8080,
-    forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'http') === 'https',
+    wsHost,
+    wsPort,
+    wssPort: wsPort,
+    forceTLS,
     enabledTransports: ['ws', 'wss'],
     // Auth pour les canaux privés — envoie le Bearer token
     authEndpoint: `${import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'}/broadcasting/auth`,
@@ -28,6 +32,16 @@ export function getEcho() {
         Accept: 'application/json',
       },
     },
+  })
+
+  const pusherConnection = echoInstance.connector?.pusher?.connection
+  pusherConnection?.bind('error', (error) => {
+    console.warn('[Reverb] WebSocket error', error)
+  })
+  pusherConnection?.bind('state_change', (states) => {
+    if (states.current === 'connected' || states.current === 'disconnected') {
+      console.info(`[Reverb] ${states.current}`)
+    }
   })
 
   return echoInstance

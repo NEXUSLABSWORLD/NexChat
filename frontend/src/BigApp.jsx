@@ -855,7 +855,10 @@ function App() {
     }
 
     return () => {
-      if (activeConversationId) echo.leave(`conversation.${activeConversationId}`)
+      if (activeConversationId) {
+        subscribedConvIds.current.delete(activeConversationId)
+        echo.leave(`conversation.${activeConversationId}`)
+      }
       if (activeGroupId) echo.leave(`group.${activeGroupId}`)
     }
   }, [activeConversationId, activeGroupId, isAuthenticated, profile.id, profile.primary_language_code])
