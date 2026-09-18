@@ -39,7 +39,7 @@ class AuthTest extends TestCase
                     ]
                 ])
                 ->assertJson([
-                    'message' => 'User registered successfully',
+                    'message' => 'verification_required',
                     'user' => [
                         'username' => 'testuser',
                         'email' => 'test@example.com',
@@ -108,6 +108,7 @@ class AuthTest extends TestCase
             'email' => 'login@example.com',
             'password_hash' => Hash::make('password123'),
             'primary_language_code' => 'en',
+            'email_verified_at' => now(),
         ]);
 
         $response = $this->postJson('/api/auth/login', [

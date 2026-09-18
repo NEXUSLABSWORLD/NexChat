@@ -54,8 +54,10 @@ class MessagingTest extends TestCase
                     'message',
                     'conversation' => [
                         'id',
-                        'user_one_id',
-                        'user_two_id',
+                        'other_user' => [
+                            'id',
+                            'username',
+                        ],
                         'created_at',
                     ]
                 ])
@@ -121,8 +123,10 @@ class MessagingTest extends TestCase
                     'conversations' => [
                         '*' => [
                             'id',
-                            'user_one_id',
-                            'user_two_id',
+                            'other_user' => [
+                                'id',
+                                'username',
+                            ],
                         ]
                     ]
                 ]);

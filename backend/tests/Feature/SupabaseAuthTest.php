@@ -68,6 +68,7 @@ class SupabaseAuthTest extends TestCase
             'email' => 'logintest@example.com',
             'password_hash' => Hash::make('password123'),
             'primary_language_code' => 'en',
+            'email_verified_at' => now(),
         ]);
 
         $response = $this->postJson('/api/auth/login', [
