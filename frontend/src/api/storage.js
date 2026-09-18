@@ -33,7 +33,13 @@ export async function uploadFile(file, userId, onProgress = () => {}) {
           file_size: file.size,
         })
       } else {
-        reject(new Error(`Upload failed: ${xhr.statusText} (${xhr.status})`))
+        let details = xhr.responseText
+        try {
+          details = JSON.parse(xhr.responseText)?.message || details
+        } catch {
+          // Keep the raw response when Supabase does not return JSON.
+        }
+        reject(new Error(`Upload failed: ${details || xhr.statusText} (${xhr.status})`))
       }
     })
 
@@ -41,11 +47,9 @@ export async function uploadFile(file, userId, onProgress = () => {}) {
 
     xhr.open('POST', uploadUrl)
     xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_ANON_KEY}`)
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
     xhr.setRequestHeader('x-upsert', 'false')
-
-    const formData = new FormData()
-    formData.append('', file)
-    xhr.send(formData)
+    xhr.send(file)
   })
 }
 
