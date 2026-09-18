@@ -12,22 +12,25 @@ export default function ConversationList({
   setShowMessagesMenu,
   messagesFilter,
   setMessagesFilter,
-  conversationList,
+  conversationList = [],
   setConversationList,
   apiMarkConversationAsRead,
   settingsProfile,
   query,
   setQuery,
   convLoading,
-  unifiedList,
+  unifiedList = [],
   activeGroupId,
   setActiveGroupId,
   activeConversationId,
   setActiveConversationId,
   setCurrentView,
   setConvContextMenu,
-  formatTime
+  formatTime,
+  remoteResults = [],
+  handleStartConversation
 }) {
+  const safeFormatTime = typeof formatTime === 'function' ? formatTime : (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
   return (
     <aside className={`sidebar ${mobileSidebarOpen ? 'open' : ''} ${sidebarCollapsed ? 'collapsed' : ''} ${sidebarMode === 'compact' ? 'compact' : ''}`}>
       <header className="sidebar-header" style={{ position: 'relative' }}>
@@ -179,7 +182,7 @@ export default function ConversationList({
                     {item.displayName}
                   </span>
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    {isGroup ? formatTime(item.created_at) : (item.latest_message ? formatTime(item.latest_message.created_at) : '')}
+                    {isGroup ? safeFormatTime(item.created_at) : (item.latest_message ? safeFormatTime(item.latest_message.created_at) : '')}
                   </span>
                 </div>
                 <div className="conversation-preview" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

@@ -14,15 +14,24 @@ import {
   ArrowRight,
   Send,
   User,
-  Bot
+  Bot,
+  Crown
 } from 'lucide-react';
+import SubscriptionModal from './components/SubscriptionModal';
 import './Landing.css';
 
 export default function Landing({ onGetStarted, onLogin }) {
   const [openFaq, setOpenFaq] = useState(null);
+  const [isSubModalOpen, setIsSubModalOpen] = useState(false);
+  const [modalTier, setModalTier] = useState('obsidian_pro');
 
   const toggleFaq = (index) => {
     setOpenFaq(openFaq === index ? null : index);
+  };
+
+  const handleOpenPlan = (tier) => {
+    setModalTier(tier);
+    setIsSubModalOpen(true);
   };
 
   const faqData = [
@@ -32,7 +41,7 @@ export default function Landing({ onGetStarted, onLogin }) {
     },
     {
       q: "Quelle est la différence entre Obsidian Pro et Elite Digital ?",
-      a: "Obsidian Pro (8,99 €/mois) offre des traductions IA illimitées et le stockage multimédia HD. Elite Digital (24,99 €/mois) inclut en plus le support IA prioritaire (Gemini Pro), des stories personnalisées et l'accès garanti à nos serveurs à très faible latence."
+      a: "Obsidian Pro (5 500 FCFA / ~8,99 € par mois) offre des traductions IA illimitées et les Stories HD. Elite Digital (15 000 FCFA / ~24,99 € par mois) inclut en plus le support IA prioritaire (Gemini 1.5 Pro), la synthèse vocale de groupe et des fichiers jusqu'à 100 Mo."
     },
     {
       q: "Mes conversations et fichiers sont-ils sécurisés ?",
@@ -40,7 +49,7 @@ export default function Landing({ onGetStarted, onLogin }) {
     },
     {
       q: "Quels modes de paiement sont acceptés (Mobile Money / Carte) ?",
-      a: "Nous acceptons les cartes bancaires (Visa, MasterCard, cartes virtuelles) ainsi que le Mobile Money (MTN MOMO, Moov, Orange Money) via nos partenaires de paiement sécurisés."
+      a: "Nous acceptons nativement le Mobile Money (MTN MOMO, Orange Money, Wave, Moov) ainsi que les cartes bancaires (Visa, MasterCard) via notre passerelle sécurisée NotchPay."
     }
   ];
 
@@ -210,8 +219,8 @@ export default function Landing({ onGetStarted, onLogin }) {
               <h3>Gratuit</h3>
               <p>Découverte de l'expérience NexChat</p>
               <div className="pricing-price">
-                <span className="amount">0 €</span>
-                <span className="period">/ pour toujours</span>
+                <span className="amount">0 FCFA</span>
+                <span className="period">/ pour toujours (0 €)</span>
               </div>
             </div>
             <ul className="pricing-features">
@@ -232,8 +241,8 @@ export default function Landing({ onGetStarted, onLogin }) {
               <h3>Obsidian Pro</h3>
               <p>Pour les utilisateurs fréquents et pros</p>
               <div className="pricing-price">
-                <span className="amount">8,99 €</span>
-                <span className="period">/ mois</span>
+                <span className="amount">5 500 FCFA</span>
+                <span className="period">/ mois (~8,99 €)</span>
               </div>
             </div>
             <ul className="pricing-features">
@@ -243,7 +252,7 @@ export default function Landing({ onGetStarted, onLogin }) {
               <li><Check size={16} color="#a855f7" /> Stories haute résolution & filtres IA</li>
               <li><Check size={16} color="#a855f7" /> Badge Pro sur votre profil</li>
             </ul>
-            <button className="btn-pricing-primary" onClick={onGetStarted}>
+            <button className="btn-pricing-primary" onClick={() => handleOpenPlan('obsidian_pro')}>
               Passer à Obsidian Pro
             </button>
           </div>
@@ -254,8 +263,8 @@ export default function Landing({ onGetStarted, onLogin }) {
               <h3>Elite Digital</h3>
               <p>L'expérience ultime sans aucune limite</p>
               <div className="pricing-price">
-                <span className="amount">24,99 €</span>
-                <span className="period">/ mois</span>
+                <span className="amount">15 000 FCFA</span>
+                <span className="period">/ mois (~24,99 €)</span>
               </div>
             </div>
             <ul className="pricing-features">
@@ -265,7 +274,7 @@ export default function Landing({ onGetStarted, onLogin }) {
               <li><Check size={16} color="#06b6d4" /> Stockage illimité sur Supabase Cloud</li>
               <li><Check size={16} color="#06b6d4" /> Badge de certification Elite</li>
             </ul>
-            <button className="btn-pricing-secondary" onClick={onGetStarted}>
+            <button className="btn-pricing-secondary" onClick={() => handleOpenPlan('elite_digital')}>
               Rejoindre l'Élite
             </button>
           </div>
@@ -348,6 +357,21 @@ export default function Landing({ onGetStarted, onLogin }) {
           <p className="footer-dev">Développé pour l'excellence et l'élégance.</p>
         </div>
       </footer>
+
+      <SubscriptionModal
+        isOpen={isSubModalOpen}
+        onClose={() => setIsSubModalOpen(false)}
+        currentTier="free"
+        onRequireAuth={(mode, tier) => {
+          localStorage.setItem('pending_subscription_plan', tier);
+          setIsSubModalOpen(false);
+          if (mode === 'login') {
+            onLogin();
+          } else {
+            onGetStarted();
+          }
+        }}
+      />
     </div>
   );
 }

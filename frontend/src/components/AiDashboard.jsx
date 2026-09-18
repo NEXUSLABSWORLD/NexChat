@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Languages, History, Settings, Bot, ChevronRight, Activity, Globe2, MessageSquare, Send } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Sparkles, Languages, History, Settings, Bot, ChevronRight, Activity, Globe2, MessageSquare, Send, Crown, CreditCard } from 'lucide-react';
 import apiClient from '../api/client';
+import { getSubscriptionStatus } from '../api/subscription';
+import SubscriptionModal from './SubscriptionModal';
 import './AiDashboard.css';
 
 export default function AiDashboard() {
@@ -8,6 +10,8 @@ export default function AiDashboard() {
   const [stats, setStats] = useState({ words_translated: 0, top_languages: [] });
   const [lexicon, setLexicon] = useState([]);
   const [config, setConfig] = useState({ ai_proactive_translation: true, ai_translation_formality: 'auto' });
+  const [subStatus, setSubStatus] = useState(null);
+  const [isSubModalOpen, setIsSubModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // NexBot Chat State
@@ -66,6 +70,11 @@ export default function AiDashboard() {
             ai_translation_formality: resProfile.data.data.ai_translation_formality ?? 'auto'
           });
         }
+
+        const resSub = await getSubscriptionStatus();
+        if (resSub) {
+          setSubStatus(resSub);
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -95,7 +104,7 @@ export default function AiDashboard() {
       <div className="ai-dashboard-layout">
         <aside className="ai-sidebar">
           <button className={`ai-nav-btn ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}>
-            <Activity size={20} /> Statistiques
+            <Activity size={20} /> Statistiques & Quotas
           </button>
           <button className={`ai-nav-btn ${activeTab === 'lexicon' ? 'active' : ''}`} onClick={() => setActiveTab('lexicon')}>
             <History size={20} /> Lexique
@@ -106,27 +115,42 @@ export default function AiDashboard() {
           <button className={`ai-nav-btn ${activeTab === 'nexbot' ? 'active' : ''}`} onClick={() => setActiveTab('nexbot')}>
             <Bot size={20} /> NexBot
           </button>
+          <button className={`ai-nav-btn ${activeTab === 'subscription' ? 'active' : ''}`} onClick={() => setActiveTab('subscription')}>
+            <Crown size={20} style={{ color: '#c4b5fd' }} /> Abonnement
+          </button>
         </aside>
 
         <main className="ai-content">
           {activeTab === 'stats' && (
             <div className="ai-panel fade-in">
-              <h2>Vue d'ensemble</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2>Vue d'ensemble</h2>
+                <button
+                  className="btn-pricing-primary"
+                  style={{ padding: '8px 16px', fontSize: '0.85rem', borderRadius: '10px', background: 'linear-gradient(135deg, #8b5cf6, #ec4899)', color: '#fff', border: 'none', cursor: 'pointer' }}
+                  onClick={() => setIsSubModalOpen(true)}
+                >
+                  💎 Gérer mon abonnement
+                </button>
+              </div>
+
               <div className="ai-stats-grid">
                 <div className="ai-stat-card">
                   <div className="ai-stat-icon"><Languages size={24} /></div>
                   <div className="ai-stat-value">{stats.words_translated || 0}</div>
-                  <div className="ai-stat-label">Mots Traduits</div>
+                  <div className="ai-stat-label">Mots Traduits ({subStatus?.ai_quota?.words_limit ? `${subStatus.ai_quota.words_limit} max` : 'Illimité ✨'})</div>
+                </div>
+                <div className="ai-stat-card">
+                  <div className="ai-stat-icon"><Crown size={24} /></div>
+                  <div className="ai-stat-value" style={{ textTransform: 'capitalize', fontSize: '1.2rem' }}>
+                    {subStatus?.subscription_tier === 'elite_digital' ? 'Elite Digital 👑' : subStatus?.subscription_tier === 'obsidian_pro' ? 'Obsidian Pro ✨' : 'Gratuit (Free)'}
+                  </div>
+                  <div className="ai-stat-label">Forfait Actif</div>
                 </div>
                 <div className="ai-stat-card">
                   <div className="ai-stat-icon"><Globe2 size={24} /></div>
                   <div className="ai-stat-value">{stats.top_languages && stats.top_languages.length > 0 ? stats.top_languages.join(', ').toUpperCase() : '-'}</div>
                   <div className="ai-stat-label">Langues Fréquentes</div>
-                </div>
-                <div className="ai-stat-card">
-                  <div className="ai-stat-icon"><MessageSquare size={24} /></div>
-                  <div className="ai-stat-value">...</div>
-                  <div className="ai-stat-label">Résumés Générés</div>
                 </div>
               </div>
               <div className="ai-stats-chart-placeholder">
@@ -253,8 +277,61 @@ export default function AiDashboard() {
               </div>
             </div>
           )}
+
+          {activeTab === 'subscription' && (
+            <div className="ai-panel fade-in">
+              <h2>Gestion de l'Abonnement</h2>
+              <p className="ai-subtitle">Détails de votre forfait actuel et options d'upgrade.</p>
+
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '24px', marginBottom: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                  <div>
+                    <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>Statut Actuel</span>
+                    <h3 style={{ margin: '4px 0', fontSize: '1.4rem', color: '#fff' }}>
+                      {subStatus?.subscription_tier === 'elite_digital' ? '👑 Elite Digital' : subStatus?.subscription_tier === 'obsidian_pro' ? '✨ Obsidian Pro' : '🌱 Gratuit (Découverte)'}
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                      {subStatus?.has_active_subscription && subStatus?.subscription?.expires_at
+                        ? `Valide jusqu'au ${new Date(subStatus.subscription.expires_at).toLocaleDateString('fr-FR')}`
+                        : 'Accès standard avec 5 000 mots par mois.'}
+                    </p>
+                  </div>
+                  <button
+                    className="btn-pricing-primary"
+                    style={{ padding: '12px 24px', borderRadius: '12px', background: 'linear-gradient(135deg, #8b5cf6, #ec4899)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                    onClick={() => setIsSubModalOpen(true)}
+                  >
+                    💎 {subStatus?.has_active_subscription ? 'Changer de forfait' : 'Passer à Obsidian Pro'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="ai-stats-grid">
+                <div className="ai-stat-card">
+                  <div className="ai-stat-icon"><Languages size={24} /></div>
+                  <div className="ai-stat-value">{stats.words_translated || 0}</div>
+                  <div className="ai-stat-label">Mots consommés ce mois</div>
+                </div>
+                <div className="ai-stat-card">
+                  <div className="ai-stat-icon"><Crown size={24} /></div>
+                  <div className="ai-stat-value">{subStatus?.ai_quota?.words_limit ? `${subStatus.ai_quota.words_limit - (stats.words_translated || 0)}` : '∞'}</div>
+                  <div className="ai-stat-label">Mots restants</div>
+                </div>
+              </div>
+            </div>
+          )}
         </main>
       </div>
+
+      <SubscriptionModal
+        isOpen={isSubModalOpen}
+        onClose={() => setIsSubModalOpen(false)}
+        currentTier={subStatus?.subscription_tier || 'free'}
+        onSubscriptionSuccess={() => {
+          setIsSubModalOpen(false);
+          getSubscriptionStatus().then(data => data && setSubStatus(data));
+        }}
+      />
     </div>
   );
 }

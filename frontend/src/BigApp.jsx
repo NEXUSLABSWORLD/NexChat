@@ -50,12 +50,13 @@ import StoriesTray from './components/StoriesTray'
 import CommandPalette from './components/CommandPalette'
 import NotificationsModal from './components/NotificationsModal'
 import ProfileModal from './components/ProfileModal'
+import ProfilePopover from './components/ProfilePopover'
 import Navbar from './components/Navbar'
 import ConversationList from './components/ConversationList'
 import { getEcho, disconnectEcho } from './api/echo'
 
-import { uploadFile, isImage, isVideo, formatFileSize } from './api/storage'
 import apiClient, { clearSession, getStoredToken, getStoredUser, storeSession } from './api/client'
+import { initializeSubscription } from './api/subscription'
 import Landing from './Landing'
 import './App.css'
 
@@ -146,6 +147,25 @@ function App() {
   const [authError, setAuthError] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
   const [authSuccessMsg, setAuthSuccessMsg] = useState('')
+
+  // Handle pending subscription after signup/login
+  useEffect(() => {
+    if (isAuthenticated) {
+      const pendingPlan = localStorage.getItem('pending_subscription_plan')
+      if (pendingPlan) {
+        localStorage.removeItem('pending_subscription_plan')
+        initializeSubscription(pendingPlan)
+          .then((data) => {
+            if (data.authorization_url) {
+              window.location.href = data.authorization_url
+            }
+          })
+          .catch((err) => {
+            console.error('Auto subscription error:', err)
+          })
+      }
+    }
+  }, [isAuthenticated])
 
   // Handle URL verification automatically
   useEffect(() => {
@@ -1692,6 +1712,28 @@ function App() {
         isSaving={isSaving}
       />
 
+      <ProfilePopover
+        isOpen={showProfilePopover}
+        onClose={() => setShowProfilePopover(false)}
+        profile={profile}
+        userStatus={userStatus}
+        setUserStatus={setUserStatus}
+        avatarFilter={avatarFilter}
+        setAvatarFilter={setAvatarFilter}
+        voiceUrl={voiceUrl}
+        setVoiceUrl={setVoiceUrl}
+        isRecording={isRecording}
+        startRecording={startRecording}
+        stopRecording={stopRecording}
+        isPlayingVoice={isPlayingVoice}
+        playVoice={playVoice}
+        setIsLocked={setIsLocked}
+        onOpenSettings={() => {
+          setShowProfilePopover(false)
+          setShowSettings(true)
+        }}
+        onLogout={handleLogout}
+      />
 
       <Navbar
         currentView={currentView}
@@ -1710,6 +1752,7 @@ function App() {
         setShowProfilePopover={setShowProfilePopover}
         userStatus={userStatus}
         profile={profile}
+        avatarFilter={avatarFilter}
       />
 
       <ConversationList
@@ -1735,6 +1778,8 @@ function App() {
         activeConversationId={activeConversationId}
         setActiveConversationId={setActiveConversationId}
         setCurrentView={setCurrentView}
+        setConvContextMenu={setConvContextMenu}
+        formatTime={formatTime}
         remoteResults={remoteResults}
         handleStartConversation={handleStartConversation}
       />

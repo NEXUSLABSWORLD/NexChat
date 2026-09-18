@@ -27,7 +27,8 @@ export default function Navbar({
   showProfilePopover,
   setShowProfilePopover,
   userStatus,
-  profile
+  profile,
+  avatarFilter = 'normal'
 }) {
   const unreadCount = notifications.filter(n => !n.read).length
 
@@ -94,7 +95,15 @@ export default function Navbar({
             transition: 'all 0.3s ease'
           }}
         >
-           <div className="avatar-inner" style={{ fontSize: '0.75rem' }}>
+           <div
+             className="avatar-inner"
+             style={{
+               fontSize: '0.75rem',
+               filter: avatarFilter === 'cyberpunk' ? 'hue-rotate(90deg) saturate(1.5)' :
+                       avatarFilter === 'glitch' ? 'contrast(1.4) saturate(1.2)' :
+                       avatarFilter === 'carbon' ? 'grayscale(1) contrast(1.2)' : 'none'
+             }}
+           >
               {profile?.avatar_url
                 ? <img 
                     src={profile.avatar_url} 
