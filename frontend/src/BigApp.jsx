@@ -1199,61 +1199,6 @@ function App() {
         ...fileData,
       }
 
-      const handleVoiceRecording = async () => {
-        if (isRecordingVoice) {
-          voiceMessageRecorderRef.current?.stop()
-          return
-        }
-
-        if (!activeConversationId || isUploading || sendingMessage) return
-        if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-          alert('Les messages vocaux ne sont pas pris en charge par ce navigateur.')
-          return
-        }
-
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-          const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-            ? 'audio/webm;codecs=opus'
-            : 'audio/webm'
-          const recorder = new MediaRecorder(stream, { mimeType })
-          voiceMessageChunksRef.current = []
-          voiceMessageRecorderRef.current = recorder
-          recorder.ondataavailable = (event) => {
-            if (event.data.size > 0) voiceMessageChunksRef.current.push(event.data)
-          }
-          recorder.onstop = async () => {
-            stream.getTracks().forEach((track) => track.stop())
-            setIsRecordingVoice(false)
-            const blob = new Blob(voiceMessageChunksRef.current, { type: mimeType })
-            if (!blob.size) return
-
-            setIsUploading(true)
-            setUploadProgress(0)
-            try {
-              const file = new File([blob], `voice-${Date.now()}.webm`, { type: mimeType })
-              const fileData = await uploadFile(file, profile.id, (pct) => setUploadProgress(pct))
-              const response = await apiSendMessage(activeConversationId, null, fileData)
-              const data = response.data
-              setMessages((prev) => prev.some((message) => message.id === data.id) ? prev : [...prev, data])
-              setConversationList((prev) => prev.map((conversation) =>
-                conversation.id === activeConversationId
-                  ? { ...conversation, latest_message: data, last_message_at: data.created_at }
-                  : conversation,
-              ))
-            } catch (error) {
-              alert(`Erreur lors de l'envoi vocal : ${error.message}`)
-            } finally {
-              setIsUploading(false)
-              setUploadProgress(0)
-            }
-          }
-          recorder.start()
-          setIsRecordingVoice(true)
-        } catch (error) {
-          alert(`Accès au microphone refusé : ${error.message}`)
-        }
-      }
       setMessages((prev) => [...prev, optimisticMsg])
 
       const data = await apiSendMessage(activeConversationId, null, fileData)
@@ -1270,6 +1215,62 @@ function App() {
     } finally {
       setIsUploading(false)
       setUploadProgress(0)
+    }
+  }
+
+  const handleVoiceRecording = async () => {
+    if (isRecordingVoice) {
+      voiceMessageRecorderRef.current?.stop()
+      return
+    }
+
+    if (!activeConversationId || isUploading || sendingMessage) return
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      alert('Les messages vocaux ne sont pas pris en charge par ce navigateur.')
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm'
+      const recorder = new MediaRecorder(stream, { mimeType })
+      voiceMessageChunksRef.current = []
+      voiceMessageRecorderRef.current = recorder
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) voiceMessageChunksRef.current.push(event.data)
+      }
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop())
+        setIsRecordingVoice(false)
+        const blob = new Blob(voiceMessageChunksRef.current, { type: mimeType })
+        if (!blob.size) return
+
+        setIsUploading(true)
+        setUploadProgress(0)
+        try {
+          const file = new File([blob], `voice-${Date.now()}.webm`, { type: mimeType })
+          const fileData = await uploadFile(file, profile.id, (pct) => setUploadProgress(pct))
+          const response = await apiSendMessage(activeConversationId, null, fileData)
+          const data = response.data
+          setMessages((prev) => prev.some((message) => message.id === data.id) ? prev : [...prev, data])
+          setConversationList((prev) => prev.map((conversation) =>
+            conversation.id === activeConversationId
+              ? { ...conversation, latest_message: data, last_message_at: data.created_at }
+              : conversation,
+          ))
+        } catch (error) {
+          alert(`Erreur lors de l'envoi vocal : ${error.message}`)
+        } finally {
+          setIsUploading(false)
+          setUploadProgress(0)
+        }
+      }
+      recorder.start()
+      setIsRecordingVoice(true)
+    } catch (error) {
+      alert(`Accès au microphone refusé : ${error.message}`)
     }
   }
 
