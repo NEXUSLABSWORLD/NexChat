@@ -71,7 +71,21 @@ php artisan serve --port=8000
 php artisan reverb:start --port=8080
 ```
 
-Renseigner ensuite les variables Supabase, IA, paiement et messagerie dans `backend/.env` selon l'environnement. Ne jamais versionner ce fichier.
+Renseigner ensuite les variables Supabase, IA, paiement et messagerie dans `backend/.env` selon l'environnement. Pour activer les e-mails de vérification avec Gmail, utiliser une adresse Gmail avec la double authentification activée et un **mot de passe d'application** :
+
+```env
+VITE_APP_URL=http://localhost:5173
+MAIL_MAILER=smtp
+MAIL_SCHEME=smtps
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=465
+MAIL_USERNAME=votre-adresse@gmail.com
+MAIL_PASSWORD=votre-mot-de-passe-d-application
+MAIL_FROM_ADDRESS=votre-adresse@gmail.com
+MAIL_FROM_NAME=NexChat
+```
+
+Ne pas utiliser le mot de passe Gmail habituel et ne jamais versionner `backend/.env`.
 
 ### 2. Préparer le frontend (React + Vite)
 ```bash
