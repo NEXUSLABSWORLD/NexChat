@@ -11,6 +11,7 @@ const BUCKET = 'nexchat-media'
  */
 export async function uploadFile(file, userId, onProgress = () => {}) {
   const ext = file.name.split('.').pop() || 'bin'
+  const contentType = (file.type || 'application/octet-stream').split(';', 1)[0]
   const uniqueName = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
   const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${uniqueName}`
 
@@ -47,7 +48,7 @@ export async function uploadFile(file, userId, onProgress = () => {}) {
 
     xhr.open('POST', uploadUrl)
     xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_ANON_KEY}`)
-    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+    xhr.setRequestHeader('Content-Type', contentType)
     xhr.setRequestHeader('x-upsert', 'false')
     xhr.send(file)
   })
