@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -138,6 +139,13 @@ class ProfileTest extends TestCase
             'password_hash' => Hash::make('password123'),
             'primary_language_code' => 'en',
         ]);
+        $contact = User::where('username', 'searchable_user')->first();
+        DB::table('user_contacts')->insert([
+            'user_id' => $user->id,
+            'contact_id' => $contact->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         $response = $this->withHeader('Authorization', 'Bearer ' . $token)
                         ->getJson('/api/profile/search?query=searchable');
@@ -156,6 +164,23 @@ class ProfileTest extends TestCase
 
         $this->assertCount(1, $response->json('users'));
         $this->assertEquals('searchable_user', $response->json('users.0.username'));
+    }
+
+    public function test_user_search_excludes_non_contacts(): void
+    {
+        [$user, $token] = $this->createAuthenticatedUser();
+
+        User::create([
+            'username' => 'not_added_user',
+            'email' => 'not-added@example.com',
+            'password_hash' => Hash::make('password123'),
+            'primary_language_code' => 'en',
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/profile/search?query=not_added');
+
+        $response->assertOk()->assertJsonCount(0, 'users');
     }
 
     /**

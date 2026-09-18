@@ -735,6 +735,12 @@ function App() {
 
       channel.listen('.message.sent', (event) => {
         const incomingMsg = event.message
+        if (!incomingMsg?.id) {
+          apiGetMessages(activeConversationId)
+            .then((data) => setMessages(data?.data || []))
+            .catch(() => {})
+          return
+        }
         
         // Si c'est un nudge/wizz, déclencher l'effet premium !
         if (incomingMsg.content_original === '🔔 NUDGE' && incomingMsg.sender_id !== profile.id) {
@@ -1053,7 +1059,18 @@ function App() {
         data = response.group_message
       }
 
-      setMessages((prev) => prev.map((m) => (m.id === optimisticMsg.id ? data : m)))
+      if (!data?.id) {
+        throw new Error('Le serveur n’a pas renvoyé le message créé.')
+      }
+
+      setMessages((prev) => {
+        const hasOptimisticMessage = prev.some((m) => m.id === optimisticMsg.id)
+        if (hasOptimisticMessage) {
+          return prev.map((m) => (m.id === optimisticMsg.id ? data : m))
+        }
+        if (prev.some((m) => m.id === data.id)) return prev
+        return [...prev, data]
+      })
       
       if (activeConversationId) {
         setConversationList((prev) =>

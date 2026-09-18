@@ -48,8 +48,13 @@ export default function CallPanel({
 
   const closeCall = useCallback(async (notify = true) => {
     if (notify && callIdRef.current) {
+      const targetIds = new Set([
+        ...peersRef.current.keys(),
+        ...(incomingCall?.callerId ? [incomingCall.callerId] : []),
+        ...participantIds.filter((id) => id !== profile.id),
+      ])
       await Promise.allSettled(
-        [...peersRef.current.keys()].map((peerId) => signal('hangup', peerId)),
+        [...targetIds].map((peerId) => signal('hangup', peerId)),
       )
     }
     peersRef.current.forEach((peer) => peer.close())
@@ -60,7 +65,7 @@ export default function CallPanel({
     setPhase('idle')
     callIdRef.current = null
     onClose?.()
-  }, [onClose, signal, stopStream])
+  }, [incomingCall, onClose, participantIds, profile.id, signal, stopStream])
 
   const createPeer = useCallback((peerId, initiator, activeCallType) => {
     if (peersRef.current.has(peerId)) return peersRef.current.get(peerId)
@@ -194,13 +199,13 @@ export default function CallPanel({
       {phase === 'incoming' ? (
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           <button type="button" onClick={acceptCall} style={{ ...buttonStyle, background: '#22c55e' }}><Phone size={18} /></button>
-          <button type="button" onClick={() => closeCall(true)} style={{ ...buttonStyle, background: '#ef4444' }}><PhoneOff size={18} /></button>
+          <button type="button" title="Refuser l'appel" aria-label="Refuser l'appel" onClick={() => closeCall(true)} style={{ ...buttonStyle, background: '#ef4444' }}><PhoneOff size={18} /></button>
         </div>
       ) : (
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           <button type="button" onClick={() => { localStreamRef.current?.getAudioTracks().forEach((track) => { track.enabled = muted }); setMuted(!muted) }} style={buttonStyle}>{muted ? <MicOff size={18} /> : <Mic size={18} />}</button>
           {callType === 'video' && <button type="button" onClick={() => { localStreamRef.current?.getVideoTracks().forEach((track) => { track.enabled = cameraOff }); setCameraOff(!cameraOff) }} style={buttonStyle}>{cameraOff ? <VideoOff size={18} /> : <Video size={18} />}</button>}
-          <button type="button" onClick={() => closeCall(true)} style={{ ...buttonStyle, background: '#ef4444' }}><PhoneOff size={18} /></button>
+          <button type="button" title="Raccrocher" aria-label="Raccrocher" onClick={() => closeCall(true)} style={{ ...buttonStyle, background: '#ef4444' }}><PhoneOff size={18} /><span className="sr-only">Raccrocher</span></button>
         </div>
       )}
     </div>

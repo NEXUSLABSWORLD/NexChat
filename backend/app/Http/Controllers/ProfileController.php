@@ -111,10 +111,19 @@ class ProfileController extends Controller
         }
 
         try {
-            $users = User::where('username', 'like', '%' . $request->query('query') . '%')
-                ->where('id', '!=', $request->user()->id)
+            $query = trim($request->query('query'));
+            $users = User::whereIn('id', function ($subquery) use ($request) {
+                    $subquery->select('contact_id')
+                        ->from('user_contacts')
+                        ->where('user_id', $request->user()->id);
+                })
+                ->where(function ($userQuery) use ($query) {
+                    $term = '%' . strtolower($query) . '%';
+                    $userQuery->whereRaw('LOWER(username) LIKE ?', [$term])
+                        ->orWhereRaw('LOWER(email) LIKE ?', [$term]);
+                })
                 ->limit(10)
-                ->get(['id', 'username', 'primary_language_code', 'is_online']);
+                ->get(['id', 'username', 'email', 'primary_language_code', 'is_online']);
 
             return response()->json([
                 'users' => $users
