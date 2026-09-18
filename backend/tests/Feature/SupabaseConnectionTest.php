@@ -15,6 +15,10 @@ class SupabaseConnectionTest extends TestCase
      */
     public function test_database_connection(): void
     {
+        if (env('TEST_SUPABASE_CONNECTION', false) !== true) {
+            $this->markTestSkipped('Supabase integration tests require TEST_SUPABASE_CONNECTION=true.');
+        }
+
         $supabase = new SupabaseService();
         $this->assertTrue($supabase->testConnection());
     }
@@ -24,6 +28,10 @@ class SupabaseConnectionTest extends TestCase
      */
     public function test_basic_database_operations(): void
     {
+        if (env('TEST_SUPABASE_CONNECTION', false) !== true) {
+            $this->markTestSkipped('Supabase integration tests require TEST_SUPABASE_CONNECTION=true.');
+        }
+
         $result = \DB::select('SELECT 1 as test');
 
         $this->assertNotEmpty($result);

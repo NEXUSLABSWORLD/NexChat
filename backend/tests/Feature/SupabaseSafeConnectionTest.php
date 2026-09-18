@@ -12,6 +12,10 @@ class SupabaseSafeConnectionTest extends TestCase
      */
     public function test_can_connect_to_supabase(): void
     {
+        if (env('TEST_SUPABASE_CONNECTION', false) !== true) {
+            $this->markTestSkipped('Supabase integration tests require TEST_SUPABASE_CONNECTION=true.');
+        }
+
         try {
             $result = DB::select('SELECT 1 as test');
             $this->assertEquals(1, $result[0]->test);
@@ -26,6 +30,10 @@ class SupabaseSafeConnectionTest extends TestCase
      */
     public function test_can_query_users(): void
     {
+        if (env('TEST_SUPABASE_CONNECTION', false) !== true) {
+            $this->markTestSkipped('Supabase integration tests require TEST_SUPABASE_CONNECTION=true.');
+        }
+
         $userCount = DB::table('users')->count();
         echo "\nFound $userCount users in Supabase.\n";
         $this->assertGreaterThanOrEqual(0, $userCount);

@@ -17,7 +17,12 @@ class MessageController extends Controller
      */
     public function store(Request $request)
     {
-        \Illuminate\Support\Facades\Log::info('Message store attempt', $request->all());
+        \Illuminate\Support\Facades\Log::info('Message store attempt', [
+            'user_id' => $request->user()?->id,
+            'conversation_id' => $request->input('conversation_id'),
+            'has_content' => $request->filled('content'),
+            'has_file' => $request->filled('file_url'),
+        ]);
         $user = $request->user();
 
         $validator = Validator::make($request->all(), [
@@ -104,10 +109,13 @@ class MessageController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Message store failed: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            \Illuminate\Support\Facades\Log::error('Message store failed', [
+                'user_id' => $user->id,
+                'conversation_id' => $request->input('conversation_id'),
+                'exception' => $e,
+            ]);
             return response()->json([
-                'message' => 'Failed to send message',
-                'error' => $e->getMessage()
+                'message' => 'Failed to send message'
             ], 500);
         }
     }

@@ -145,7 +145,7 @@ class ProfileController extends Controller
             ], 422);
         }
 
-        if (!\Illuminate\Support\Facades\Hash::check($request->current_password, $user->password)) {
+        if (!\Illuminate\Support\Facades\Hash::check($request->current_password, $user->password_hash)) {
             return response()->json([
                 'message' => 'Current password incorrect',
                 'errors' => ['current_password' => ['Le mot de passe actuel est incorrect.']]
@@ -153,7 +153,7 @@ class ProfileController extends Controller
         }
 
         $user->update([
-            'password' => \Illuminate\Support\Facades\Hash::make($request->new_password)
+            'password_hash' => \Illuminate\Support\Facades\Hash::make($request->new_password)
         ]);
 
         return response()->json([

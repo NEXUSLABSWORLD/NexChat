@@ -17,23 +17,23 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Public routes (no authentication required)
-Route::prefix('auth')->group(function () {
+Route::prefix('auth')->middleware('throttle:auth')->group(function () {
     Route::post('/register', [RegisterController::class, 'register']);
     Route::post('/login', [LoginController::class, 'login']);
     Route::post('/login/verify', [LoginController::class, 'verifyLogin']);
 });
 
 // NotchPay Webhook (public, secured via HMAC signature)
-Route::post('/webhooks/notchpay', [SubscriptionController::class, 'webhook']);
+Route::post('/webhooks/notchpay', [SubscriptionController::class, 'webhook'])->middleware('throttle:api');
 
 // Public Subscription routes (guest checkout initialization + callback verification)
-Route::prefix('subscription')->group(function () {
+Route::prefix('subscription')->middleware('throttle:api')->group(function () {
     Route::post('/initialize-public', [SubscriptionController::class, 'initializePublic']);
     Route::get('/verify', [SubscriptionController::class, 'verify']);
 });
 
 // Protected routes (Sanctum authentication required)
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
     // Auth
     Route::post('/auth/logout', [LoginController::class, 'logout']);
