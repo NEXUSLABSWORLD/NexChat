@@ -2,7 +2,7 @@ import apiClient from './client'
 
 export const getContacts = async () => {
   const { data } = await apiClient.get('/moderation/contacts')
-  return data // array of user IDs
+  return data // contact user profiles
 }
 
 export const toggleContact = async (contactId) => {

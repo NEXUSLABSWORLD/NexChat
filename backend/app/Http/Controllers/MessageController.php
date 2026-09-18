@@ -67,24 +67,11 @@ class MessageController extends Controller
             $sourceLang = $user->primary_language_code ?? 'fr';
             $targetLang = $recipient?->primary_language_code ?? 'fr';
             $contentOriginal = $request->input('content', '');
-            $contentTranslated = null;
-
-            if ($contentOriginal && $sourceLang !== $targetLang && $user->canUseAiTranslation()) {
-                $translationService = app(\App\Services\TranslationService::class);
-                $translated = $translationService->translate($contentOriginal, $targetLang, $sourceLang);
-                if ($translated) {
-                    $contentTranslated = $translated['text'];
-                    // Increment the user's translated words count
-                    $wordsCount = str_word_count($contentOriginal);
-                    $user->increment('ai_words_translated_count', $wordsCount);
-                }
-            }
-
             $message = Message::create([
                 'conversation_id'   => $request->conversation_id,
                 'sender_id'         => $user->id,
                 'content_original'  => $contentOriginal,
-                'content_translated'=> $contentTranslated,
+                'content_translated'=> null,
                 'source_lang'       => $sourceLang,
                 'target_lang'       => $targetLang,
                 'is_read'           => false,
@@ -101,6 +88,25 @@ class MessageController extends Controller
                 broadcast(new MessageSent($message, $conversation->id));
             } catch (\Exception $broadcastErr) {
                 \Illuminate\Support\Facades\Log::warning('Broadcast failed (Reverb may be down): ' . $broadcastErr->getMessage());
+            }
+
+            if ($contentOriginal && $sourceLang !== $targetLang && $user->canUseAiTranslation()) {
+                try {
+                    $translationService = app(\App\Services\TranslationService::class);
+                    $translated = $translationService->translate($contentOriginal, $targetLang, $sourceLang);
+                    if ($translated) {
+                        $message->update(['content_translated' => $translated['text']]);
+                        $user->increment('ai_words_translated_count', str_word_count($contentOriginal));
+
+                        try {
+                            broadcast(new MessageSent($message->fresh(), $conversation->id));
+                        } catch (\Exception $broadcastErr) {
+                            \Illuminate\Support\Facades\Log::warning('Translation update broadcast failed: ' . $broadcastErr->getMessage());
+                        }
+                    }
+                } catch (\Throwable $translationErr) {
+                    \Illuminate\Support\Facades\Log::warning('Message translation failed after delivery: ' . $translationErr->getMessage());
+                }
             }
 
             return response()->json([

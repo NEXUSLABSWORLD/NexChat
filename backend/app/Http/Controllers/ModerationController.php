@@ -13,7 +13,16 @@ class ModerationController extends Controller
     {
         $contacts = DB::table('user_contacts')
             ->where('user_id', $request->user()->id)
-            ->pluck('contact_id');
+            ->join('users', 'users.id', '=', 'user_contacts.contact_id')
+            ->get([
+                'users.id',
+                'users.username',
+                'users.email',
+                'users.primary_language_code',
+                'users.avatar_url',
+                'users.is_online',
+                'users.last_seen_at',
+            ]);
         
         return response()->json($contacts);
     }

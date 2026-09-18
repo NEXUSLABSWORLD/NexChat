@@ -232,6 +232,7 @@ function App() {
   
   // Safety & Moderation States (Moved up to avoid ReferenceError in useMemo)
   const [contacts, setContacts] = useState([])
+  const [contactUsers, setContactUsers] = useState([])
   const [blockedUsers, setBlockedUsers] = useState([])
   const [showSecurityMenu, setShowSecurityMenu] = useState(false)
   const [showReportModal, setShowReportModal] = useState(false)
@@ -327,8 +328,8 @@ function App() {
       if (messagesFilter === 'unread') {
         list = list.filter((c) => c.unread_count > 0)
       } else if (messagesFilter === 'contacts') {
-        const contactIds = contacts.map(u => u.id)
-        list = list.filter((c) => c.other_user && contactIds.includes(c.other_user.id))
+        const contactIds = new Set(contacts.map((contact) => Number(contact)))
+        list = list.filter((c) => c.other_user && contactIds.has(Number(c.other_user.id)))
       }
     }
     
@@ -351,7 +352,7 @@ function App() {
       timestamp: c.last_message_at || c.created_at
     }));
 
-    const grps = groups.map(g => ({
+    const grps = messagesFilter === 'contacts' ? [] : groups.map(g => ({
       ...g,
       isGroup: true,
       displayName: g.name,
@@ -359,8 +360,29 @@ function App() {
       timestamp: g.created_at
     }));
 
-    return [...convs, ...grps].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  }, [filteredConversations, groups])
+    const existingConversationContactIds = new Set(conversationList.map((conversation) => Number(conversation.other_user?.id)))
+    const contactOnlyUsers = messagesFilter === 'contacts'
+      ? contactUsers
+          .filter((contact) => !existingConversationContactIds.has(Number(contact.id)))
+          .filter((contact) => {
+            const normalizedQuery = query.trim().toLowerCase()
+            return !normalizedQuery
+              || `${contact.username} ${contact.email}`.toLowerCase().includes(normalizedQuery)
+          })
+          .map((contact) => ({
+            id: `contact-${contact.id}`,
+            contactUserId: contact.id,
+            isContactOnly: true,
+            isGroup: false,
+            displayName: contact.username,
+            displayAvatar: contact.avatar_url,
+            other_user: contact,
+            timestamp: contact.last_seen_at || contact.created_at || 0,
+          }))
+      : []
+
+    return [...convs, ...contactOnlyUsers, ...grps].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  }, [filteredConversations, groups, conversationList, contactUsers, messagesFilter, query])
 
   // Settings & Profile State (Moved to top level to follow Rules of Hooks)
   const [showSettings, setShowSettings] = useState(false)
@@ -608,6 +630,7 @@ function App() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [isShaking, setIsShaking] = useState(false)
   const subscribedConvIds = useRef(new Set())
+  const backgroundMessageIds = useRef(new Set())
 
   const triggerNudgeEffect = () => {
     if (dndMode) return
@@ -682,7 +705,16 @@ function App() {
       .catch(() => {})
 
     // Load safety states
-    apiGetContacts().then(data => setContacts(data || [])).catch(() => {})
+    apiGetContacts()
+      .then((data) => {
+        const users = Array.isArray(data) ? data : []
+        setContactUsers(users)
+        setContacts(users.map((contact) => Number(contact.id)))
+      })
+      .catch(() => {
+        setContactUsers([])
+        setContacts([])
+      })
     apiGetBlockedUsers().then(data => setBlockedUsers(data || [])).catch(() => {})
   }, [isAuthenticated])
 
@@ -750,7 +782,7 @@ function App() {
         setMessages((prev) => {
           const index = prev.findIndex((m) => m.id === incomingMsg.id)
           if (index !== -1) {
-            // Mise à jour d'un message existant (ex: supprimé)
+            // Mise à jour d'un message existant (traduction ou suppression)
             const newMessages = [...prev]
             newMessages[index] = incomingMsg
             return newMessages
@@ -848,13 +880,18 @@ function App() {
         // Si le message arrive dans la conversation active, le listener principal s'en occupe
         if (c.id === activeConversationId) return
 
+        const isTranslationUpdate = backgroundMessageIds.current.has(incomingMsg.id)
+        backgroundMessageIds.current.add(incomingMsg.id)
+
         // 1. Incrémenter le badge non-lu dans la barre latérale
         setConversationList((prev) =>
           prev.map((item) =>
             item.id === c.id
               ? {
                   ...item,
-                  unread_count: (item.unread_count || 0) + 1,
+                  unread_count: isTranslationUpdate
+                    ? item.unread_count || 0
+                    : (item.unread_count || 0) + 1,
                   latest_message: incomingMsg,
                   last_message_at: incomingMsg.created_at,
                 }
@@ -872,18 +909,20 @@ function App() {
         }
 
         // 3. Ajouter au centre de notifications global
-        setNotifications((prev) => [
-          {
-            id: incomingMsg.id,
-            conversationId: c.id,
-            senderName: c.other_user?.username || 'Quelqu’un',
-            senderAvatar: c.other_user?.avatar_url,
-            text: notifText,
-            time: new Date(incomingMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            read: false,
-          },
-          ...prev,
-        ])
+        if (!isTranslationUpdate) {
+          setNotifications((prev) => [
+            {
+              id: incomingMsg.id,
+              conversationId: c.id,
+              senderName: c.other_user?.username || 'Quelqu’un',
+              senderAvatar: c.other_user?.avatar_url,
+              text: notifText,
+              time: new Date(incomingMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              read: false,
+            },
+            ...prev,
+          ])
+        }
       })
 
       subscribedConvIds.current.add(c.id)
@@ -1190,8 +1229,11 @@ function App() {
 
     const result = await apiAddContactByEmail(normalizedEmail)
     const contactId = result.contact?.id
-    if (contactId && !contacts.includes(contactId)) {
-      setContacts((current) => [...current, contactId])
+    if (contactId && !contacts.includes(Number(contactId))) {
+      setContacts((current) => [...current, Number(contactId)])
+      if (result.contact) {
+        setContactUsers((current) => [...current.filter((contact) => Number(contact.id) !== Number(contactId)), result.contact])
+      }
     }
   }
 
@@ -1411,11 +1453,19 @@ function App() {
       
       let updated
       if (isContact) {
-        updated = contacts.filter(id => id !== otherUserId)
+        updated = contacts.filter(id => Number(id) !== Number(otherUserId))
       } else {
-        updated = [...contacts, otherUserId]
+        updated = [...contacts, Number(otherUserId)]
       }
       setContacts(updated)
+      if (isContact) {
+        setContactUsers((current) => current.filter((contact) => Number(contact.id) !== Number(otherUserId)))
+      } else if (activeConversation?.other_user) {
+        setContactUsers((current) => [
+          ...current.filter((contact) => Number(contact.id) !== Number(otherUserId)),
+          activeConversation.other_user,
+        ])
+      }
 
       // Add activity notification
       const recipientName = activeConversation?.other_user?.username || 'Utilisateur'
@@ -1825,6 +1875,7 @@ function App() {
         remoteResults={remoteResults}
         handleStartConversation={handleStartConversation}
         onAddContactByEmail={handleAddContactByEmail}
+        contacts={contacts}
       />
 
 

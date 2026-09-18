@@ -29,6 +29,7 @@ export default function ConversationList({
   formatTime,
   remoteResults = [],
   handleStartConversation,
+  contacts = [],
   onAddContactByEmail
 }) {
   const [contactEmail, setContactEmail] = React.useState('')
@@ -186,7 +187,11 @@ export default function ConversationList({
                   setActiveGroupId(item.id)
                   setActiveConversationId(null)
                 } else {
-                  setActiveConversationId(item.id)
+                  if (item.isContactOnly) {
+                    handleStartConversation?.(item.other_user)
+                  } else {
+                    setActiveConversationId(item.id)
+                  }
                   setActiveGroupId(null)
                 }
                 setCurrentView('chat')
@@ -237,7 +242,9 @@ export default function ConversationList({
         {remoteResults && remoteResults.length > 0 && (
           <div style={{ marginTop: '16px' }} aria-label="Résultats de recherche API">
             <p style={{ padding: '0 20px 8px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Suggestions</p>
-            {remoteResults.map((user) => (
+            {remoteResults
+              .filter((user) => contacts.some((contactId) => Number(contactId) === Number(user.id)))
+              .map((user) => (
               <div
                 key={user.id}
                 className="conversation-item"
@@ -257,7 +264,7 @@ export default function ConversationList({
                   </div>
                 </div>
               </div>
-            ))}
+              ))}
           </div>
         )}
       </div>
