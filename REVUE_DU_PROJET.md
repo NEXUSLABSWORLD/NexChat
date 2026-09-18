@@ -59,9 +59,9 @@ Les branches backend et frontend ont été fusionnées dans `main`. Le frontend 
 | Reverb local | ✅ Démarre |
 | Tests Laravel sur Windows | ⚠️ Bloqués par l'absence de `pdo_sqlite` |
 | Tests Supabase réels | ⚠️ À lancer avec `TEST_SUPABASE_CONNECTION=true` |
-| CI distante | ✅ Configurée, à confirmer après le prochain push |
+| CI distante | ✅ Backend et frontend validés sur GitHub Actions |
 
-Pour exécuter la suite backend localement, PHP doit fournir `pdo_sqlite` et `sqlite3`, ou bien l'environnement de test doit utiliser PostgreSQL. Les tests d'intégration Supabase ne doivent pas être exécutés par défaut contre la base distante.
+Pour exécuter la suite backend localement, PHP doit fournir `pdo_sqlite` et `sqlite3`, ou bien l'environnement de test doit utiliser PostgreSQL. La CI dispose de SQLite et valide actuellement les 41 tests actifs ; les tests d'intégration Supabase restent opt-in et ne doivent pas être exécutés par défaut contre la base distante.
 
 ## Risques et travaux restants
 
