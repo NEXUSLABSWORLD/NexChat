@@ -41,3 +41,6 @@ build/
 Thumbs.db
 
 /frontend
+
+# Frontend local environment
+/frontend/.env
