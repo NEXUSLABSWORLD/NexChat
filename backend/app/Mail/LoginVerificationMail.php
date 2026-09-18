@@ -24,8 +24,7 @@ class LoginVerificationMail extends Mailable
     {
         $this->user = $user;
         $this->token = $token;
-        // Assume frontend URL from env or fallback to localhost:5173
-        $frontendUrl = env('VITE_APP_URL', 'http://localhost:5173');
+        $frontendUrl = config('app.frontend_url');
         $this->loginUrl = rtrim($frontendUrl, '/') . '/?verify_token=' . $token . '&email=' . urlencode($user->email);
     }
 
