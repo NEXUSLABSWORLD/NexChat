@@ -1,77 +1,70 @@
-# ✅ Backend TODO List - LinguChat (Laravel)
+# ✅ Backend Roadmap & Suivi d'Avancement - NexChat (Laravel 11)
 
-Ce document liste toutes les tâches nécessaires pour implémenter le backend de LinguChat, de l'infrastructure à l'intégration de l'IA.
+Ce document récapitule l'ensemble des modules du backend NexChat, de l'infrastructure initiale à la passerelle de paiement et la sécurité.
 
 ---
 
 ## 🛠️ Phase 1 : Setup & Infrastructure
-
 - [X] Initialiser le projet Laravel 11 (`composer create-project laravel/laravel .`)
-- [X] Configurer le fichier `.env` (Base de données, App URL)
-- [X] Installer les dépendances essentielles :
-  - [X] `laravel/sanctum` ou `passport` pour l'API Auth
-  - [X] `spatie/laravel-permission` (si nécessaire pour les rôles)
-  - [X] `guzzlehttp/guzzle` pour les appels API Traduction
-- [X] Configurer la base de données (PostgreSQL recommandé pour les gros volumes de chat)
+- [X] Configurer l'environnement `.env` (PostgreSQL Supabase, App Key, Mailer)
+- [X] Installer les dépendances clés : `laravel/sanctum`, `laravel/reverb`, `guzzlehttp/guzzle`
+- [X] Configuration de l'environnement d'exécution PHP 8.4 avec extensions (`pdo_pgsql`, `openssl`, `curl`, `mbstring`)
 
 ---
 
-## 👤 Phase 2 : Authentification & Utilisateurs
-
-- [X] Créer la migration pour `users` (Ajouter le champ `primary_language_code`)
-- [X] Créer les contrôleurs d'authentification (Register, Login, Logout)
-- [X] Implémenter l'endpoint `GET /api/user` pour récupérer le profil
-- [X] Implémenter l'endpoint `PUT /api/user/profile` pour mettre à jour la langue principale
-- [X] Créer une recherche d'utilisateurs (`GET /api/users/search?query=...`) pour démarrer une conversation
-
----
-
-## 💬 Phase 3 : Structure de Messagerie
-
-- [X] Créer les migrations :
-  - [X] `conversations` (id, user_one_id, user_two_id, last_message_at)
-  - [X] `messages` (id, conversation_id, sender_id, content_original, content_translated, source_lang, target_lang, is_read)
-- [X] Définir les relations Eloquent dans les modèles `User`, `Conversation`, `Message`
-- [X] Créer les contrôleurs :
-  - [X] `ConversationController` (Liste des chats, Création de chat)
-  - [X] `MessageController` (Envoi de message, Historique)
+## 👤 Phase 2 : Authentification, Profils & Sécurité
+- [X] Migration `users` avec `primary_language_code`, `subscription_tier`, `ai_words_translated_count`
+- [X] Contrôleurs d'authentification (`LoginController`, `RegisterController`) avec tokens Sanctum
+- [X] Validation d'email & réinitialisation de mot de passe
+- [X] Recherche d'utilisateurs (`GET /api/users/search`)
+- [X] Durcissement des politiques de sécurité Supabase RLS (Row-Level Security) sur `subscriptions`, `stories`, `nexchat-media` bucket
 
 ---
 
-## ⚡ Phase 4 : Temps Réel (WebSockets)
-
-- [x] Installer et configurer **Laravel Reverb** (recommandé pour Laravel 11) ou Pusher
-- [x] Créer l'événement `MessageSent` pour la diffusion en temps réel
-- [x] Configurer les canaux privés (`PrivateChannel`) pour la sécurité des conversations
-- [x] Implémenter les indicateurs de présence ("Online/Offline") et de saisie ("Typing")
-
----
-
-## 🤖 Phase 5 : Moteur de Traduction IA
-
-- [ ] Créer un Service Laravel `TranslationService` :
-  - [ ] Intégrer l'API (DeepL, Google Translate ou LibreTranslate)
-  - [ ] Méthode `detectLanguage($text)`
-  - [ ] Méthode `translate($text, $targetLang)`
-- [ ] **Logique de Traduction Anticipée** :
-  - [ ] Dans la méthode `store` du `MessageController` :
-    1. Identifier la langue du destinataire.
-    2. Appeler le `TranslationService` avant de sauvegarder.
-    3. Sauvegarder les deux versions (Original + Traduit).
-- [ ] Mettre en place un système de cache pour les phrases répétitives (optionnel mais recommandé)
+## 💬 Phase 3 : Messagerie & Médias
+- [X] Migrations et modèles : `conversations`, `messages`, `groups`, `group_messages`
+- [X] Upload de médias (images, vidéos, audio, fichiers) vers Supabase Storage
+- [X] Gestion des stories éphémères (24h) avec `StoryController`
+- [X] Accusés de lecture et historique paginé
 
 ---
 
-## 🧪 Phase 6 : Optimisation & Tests
-
-- [ ] Créer des tests unitaires pour le `TranslationService`
-- [ ] Tester la performance des WebSockets sous charge
-- [ ] Documenter l'API (Swagger ou Postman Collection)
-- [ ] Optimiser les requêtes SQL (Eager loading pour éviter le problème N+1 sur les messages)
+## ⚡ Phase 4 : Temps Réel (Laravel Reverb WebSockets)
+- [X] Installation et configuration de **Laravel Reverb** sur le port 8080
+- [X] Événements de diffusion : `MessageSent`, `GroupMessageSent`, `MessagesRead`
+- [X] Canaux privés sécurisés (`PrivateChannel`) pour conversations 1-à-1 et salons
+- [X] Indicateurs de présence en ligne et de saisie ("typing...")
 
 ---
 
-## 🚀 Phase 7 : Déploiement
+## 🤖 Phase 5 : Moteur IA & Traduction Proactive
+- [X] Service `TranslationService` avec moteur **DeepL API** et fallback robuste
+- [X] Traduction anticipée avant persistance et diffusion WebSocket
+- [X] Quotas de mots traduits selon le plan d'abonnement (`canUseAiTranslation()`)
+- [X] Intégration Google Gemini pour suggestions de réponses et reformulation de ton
+- [X] Historique et phrases favorites (`AiSavedPhrase`)
 
-- [ ] Configurer les Workers Laravel pour les tâches asynchrones (si nécessaire)
-- [ ] Préparer les scripts de déploiement (CI/CD)
+---
+
+## 💳 Phase 6 : Monétisation & Passerelle NotchPay
+- [X] Migration de la table `subscriptions` (user_id, tier, notchpay_reference, notchpay_transaction_id, amount, currency, status, starts_at, expires_at)
+- [X] Modèle Eloquent `Subscription` avec méthodes `activate()`, `isActive()`, `isExpired()`, scopes `active()`, `forTier()`
+- [X] Service `NotchPayService` :
+  - [X] Initialisation de paiement (`POST /payments` en XAF)
+  - [X] Vérification de transaction (`GET /payments/{reference}` avec clé publique)
+  - [X] Validation des signatures de Webhooks HMAC SHA-256 (`x-notch-signature`)
+  - [X] Résolution du problème de certificat racine SSL cURL 60 sous Windows
+- [X] Contrôleur `SubscriptionController` :
+  - [X] `POST /api/subscription/initialize-public` (Paiement direct invité depuis la Landing Page)
+  - [X] `POST /api/subscription/initialize` (Paiement pour utilisateur connecté)
+  - [X] `GET /api/subscription/verify` (Vérification et activation avec auto-connexion)
+  - [X] `GET /api/subscription/status` (Statut de l'abonnement et quota de mots en direct)
+  - [X] `POST /api/webhooks/notchpay` (Écouteur asynchrone sécurisé des événements NotchPay)
+
+---
+
+## 🧪 Phase 7 : Tests & Déploiement
+- [X] Tests unitaires et d'intégration de la connectivité Supabase
+- [X] Validation des requêtes API NotchPay en environnement sandbox avec clés réelles
+- [ ] Préparation du déploiement en production (Cloud Run / VPS / Forge)
+- [ ] Configuration des queues en production (Redis / Database workers)

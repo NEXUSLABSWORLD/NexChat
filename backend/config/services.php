@@ -51,4 +51,12 @@ return [
         'key' => env('GEMINI_API_KEY'),
     ],
 
+    'notchpay' => [
+        'public_key' => env('NOTCHPAY_PUBLIC_KEY'),
+        'secret_key' => env('NOTCHPAY_SECRET_KEY'),
+        'webhook_hash' => env('NOTCHPAY_WEBHOOK_HASH'),
+        'currency' => env('NOTCHPAY_DEFAULT_CURRENCY', 'XAF'),
+        'url' => env('NOTCHPAY_API_URL', 'https://api.notchpay.co'),
+    ],
+
 ];

@@ -1,45 +1,78 @@
-# LinguChat 🌍💬
+# NexChat v2.0 🌍💬⚡
 
-LinguChat est une plateforme de messagerie instantanée intelligente conçue pour supprimer les barrières linguistiques grâce à une "traduction anticipée".
-
-## 🚀 Le Concept : Traduction Anticipée
-Contrairement aux applications classiques, LinguChat traduit les messages dans la langue préférée du destinataire **avant même** que celui-ci ne le reçoive. Cela garantit une fluidité maximale dans les échanges internationaux, sans interruption pour cliquer sur un bouton de traduction.
-
-## ✨ Fonctionnalités Clés
-- **Authentification Sécurisée** : Inscription et connexion (Email/Mot de passe).
-- **Profil Personnalisé** : Choix obligatoire d'une langue principale.
-- **Messagerie en Temps Réel** : Communication instantanée via WebSockets (Socket.io).
-- **Traduction Automatique IA** : Détection de la langue source et traduction proactive vers la langue cible.
-- **Indicateurs de Présence** : Statut en ligne/hors ligne et indicateur de saisie ("typing...").
-- **Historique de Traduction** : Stockage des versions originales et traduites en base de données.
-
-## 🛠 Stack Technologique
-- **Frontend** : React.js (Vite, Tailwind CSS v4)
-- **Backend** : PHP 8.2+ (Laravel 11)
-- **Temps Réel** : Laravel Reverb (WebSockets)
-- **Base de Données** : PostgreSQL via Supabase Cloud
-- **IA/Traduction** : API DeepL / MyMemory / Google Translate / Generative AI Service
-
-
-## 📊 Modèle de Données
-### Utilisateurs (Users)
-- `id`, `username`, `email`, `password_hash`, `primary_language_code`
-### Conversations
-- `id`, `user_one_id`, `user_two_id`, `last_message_at`
-### Messages
-- `id`, `conversation_id`, `sender_id`, `content_original`, `content_translated`, `source_lang`, `target_lang`, `is_read`
-
-## 🗺 Roadmap de Développement
-1. **Phase 1 : Setup & Infrastructure** (Git, Environnement, Base de données).
-2. **Phase 2 : Authentification & Profils** (Gestion de la langue de l'utilisateur).
-3. **Phase 3 : Messagerie de Base** (Sockets, Envoi de texte simple).
-4. **Phase 4 : Intégration de l'IA** (Moteur de traduction côté serveur).
-5. **Phase 5 : Interface Utilisateur (UI/UX)** (Design moderne type Telegram).
-6. **Phase 6 : Tests & Déploiement** (Optimisation de la latence).
-
-## 👥 Équipe
-- **Backend & DevOps** : @[Collègue]
-- **Frontend & UI/UX** : @[Collègue]
+**NexChat** est une plateforme de messagerie instantanée intelligente et multilingue, propulsée par l'Intelligence Artificielle (DeepL & Google Gemini) et dotée d'un système d'abonnements et de monétisation complet via **NotchPay**.
 
 ---
-*Projet développé dans le cadre du binôme - 7 Mai 2026*
+
+## 🚀 Le Concept : Traduction Proactive & Anticipée
+Contrairement aux applications classiques où l'utilisateur doit manuellement traduire chaque message, NexChat détecte la langue de l'expéditeur et traduit le message dans la langue préférée du destinataire **avant même** sa livraison en temps réel via WebSockets.
+
+---
+
+## ✨ Fonctionnalités Principales
+
+### 💬 Messagerie & Réseau
+- **Messagerie Instantanée Temps Réel** : Communication ultra-rapide via **Laravel Reverb (WebSockets)**.
+- **Traduction Anticipée par IA** : Traduction proactive bidirectionnelle motorisée par **DeepL API** avec bascule de secours.
+- **Support Média & Pièces Jointes** : Partage d'images, vidéos, notes vocales et documents stockés sur **Supabase Storage**.
+- **Stories & Statuts Éphémères** : Publication et visualisation de stories avec expiration 24h.
+- **Discussions de Groupe & Salons** : Gestion complète des salons avec participants et rôles.
+- **Indicateurs Temps Réel** : Présence (En ligne / Hors ligne), accusés de lecture et indicateurs de frappe ("en train d'écrire...").
+
+### 🧠 Intelligence Artificielle & Outils
+- **Assistant & Suggestions IA** : Suggestions de réponses contextuelles et reformulation de ton (Gemini).
+- **Tableau de Bord IA (AiDashboard)** : Suivi en direct du quota de mots traduits, historique et phrases sauvegardées.
+
+### 💳 Monétisation & Abonnements (NotchPay)
+- **Passerelle de Paiement NotchPay** : Intégration complète Mobile Money (MTN, Orange Money) et Cartes Bancaires en **FCFA (XAF)**.
+- **Tunnel de Paiement Visiteur (Guest Checkout)** : Achat direct depuis la Landing Page sans inscription préalable obligatoire (création automatique du compte et token de connexion immédiat après paiement).
+- **Webhooks & Sécurité HMAC** : Vérification cryptographique SHA-256 (`x-notch-signature`) pour l'activation instantanée et infalsifiable.
+- **Grille Tarifaire** :
+  - **Gratuit (Free)** : 5 000 mots IA/mois.
+  - **Obsidian Pro** : `5 500 FCFA/mois` (~8,99 €) — Traduction illimitée, audio haute qualité.
+  - **Elite Digital** : `15 000 FCFA/mois` (~24,99 €) — Tous les accès IA prioritaires, support VIP.
+
+---
+
+## 🛠️ Stack Technologique
+
+### Frontend
+- **Framework** : React 19 + Vite
+- **Styling** : CSS Moderne personnalisé avec design Glassmorphism sombre et Tailwind CSS
+- **Temps Réel** : Laravel Echo & Pusher JS (connectés au serveur Reverb)
+- **Icônes** : Lucide React
+
+### Backend & Infrastructure
+- **Framework** : Laravel 11 (PHP 8.4)
+- **Base de Données** : PostgreSQL via **Supabase Cloud** (avec politiques de sécurité Row-Level Security durcies)
+- **Serveur WebSockets** : **Laravel Reverb** (haute performance, natif PHP)
+- **Paiements** : **NotchPay API** (initialisation, vérification et webhooks)
+- **APIs IA** : DeepL API + Google Gemini API
+
+---
+
+## 🏃 Démarrage Rapide
+
+### 1. Backend (Laravel)
+```bash
+cd backend
+php artisan serve --port=8000
+# Dans un autre terminal :
+php artisan reverb:start --port=8080
+```
+
+### 2. Frontend (React + Vite)
+```bash
+cd frontend/frontend
+npm run dev
+```
+
+L'application est accessible sur `http://localhost:5173`.
+
+---
+
+## 🔒 Sécurité & Bonnes Pratiques
+- Authentification par jetons sécurisés **Laravel Sanctum**.
+- Row-Level Security (RLS) activé sur les tables critiques Supabase (`subscriptions`, `stories`, `messages`).
+- Bucket de stockage sécurisé avec politiques de restriction.
+- Validation rigoureuse des signatures HMAC SHA-256 pour tous les événements de paiement NotchPay.

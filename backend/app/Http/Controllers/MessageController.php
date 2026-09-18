@@ -64,7 +64,7 @@ class MessageController extends Controller
             $contentOriginal = $request->input('content', '');
             $contentTranslated = null;
 
-            if ($contentOriginal && $sourceLang !== $targetLang) {
+            if ($contentOriginal && $sourceLang !== $targetLang && $user->canUseAiTranslation()) {
                 $translationService = app(\App\Services\TranslationService::class);
                 $translated = $translationService->translate($contentOriginal, $targetLang, $sourceLang);
                 if ($translated) {

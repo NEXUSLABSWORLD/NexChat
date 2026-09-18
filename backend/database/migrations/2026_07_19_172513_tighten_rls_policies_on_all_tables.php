@@ -53,25 +53,28 @@ return new class extends Migration
             'migrations',
         ];
 
-        foreach ($allTables as $table) {
-            if (!Schema::hasTable($table)) {
-                continue;
+        if (DB::getDriverName() === 'pgsql') {
+            foreach ($allTables as $table) {
+                if (!Schema::hasTable($table)) {
+                    continue;
+                }
+
+                // Drop the old permissive policy
+                DB::statement("DROP POLICY IF EXISTS authenticated_access ON public.{$table};");
+
+                if (in_array($table, $internalTables)) {
+                    // Internal tables: no policy at all = deny everything to authenticated/anon
+                    // Laravel (postgres role) still bypasses RLS
+                    continue;
+                }
+
+                // User-facing tables: allow SELECT only, deny direct writes via PostgREST
+                DB::statement(
+                    "CREATE POLICY authenticated_select ON public.{$table} FOR SELECT TO authenticated USING (true);"
+                );
             }
-
-            // Drop the old permissive policy
-            DB::statement("DROP POLICY IF EXISTS authenticated_access ON public.{$table};");
-
-            if (in_array($table, $internalTables)) {
-                // Internal tables: no policy at all = deny everything to authenticated/anon
-                // Laravel (postgres role) still bypasses RLS
-                continue;
-            }
-
-            // User-facing tables: allow SELECT only, deny direct writes via PostgREST
-            DB::statement(
-                "CREATE POLICY authenticated_select ON public.{$table} FOR SELECT TO authenticated USING (true);"
-            );
         }
+
     }
 
     /**

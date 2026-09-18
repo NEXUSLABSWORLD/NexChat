@@ -14,18 +14,16 @@ return new class extends Migration
     {
         $tables = ['user_contacts', 'user_blocks', 'user_reports', 'posts', 'post_likes', 'stories'];
 
-        foreach ($tables as $table) {
-            if (Schema::hasTable($table)) {
-                // Enable RLS
-                DB::statement("ALTER TABLE public.$table ENABLE ROW LEVEL SECURITY;");
-                
-                // Drop existing policies if any (to avoid duplicates)
-                DB::statement("DROP POLICY IF EXISTS authenticated_access ON public.$table;");
-                
-                // Create permissive policy for authenticated users
-                DB::statement("CREATE POLICY authenticated_access ON public.$table FOR ALL TO authenticated USING (true);");
+        if (DB::getDriverName() === 'pgsql') {
+            foreach ($tables as $table) {
+                if (Schema::hasTable($table)) {
+                    DB::statement("ALTER TABLE public.$table ENABLE ROW LEVEL SECURITY;");
+                    DB::statement("DROP POLICY IF EXISTS authenticated_access ON public.$table;");
+                    DB::statement("CREATE POLICY authenticated_access ON public.$table FOR ALL TO authenticated USING (true);");
+                }
             }
         }
+
     }
 
     /**

@@ -95,6 +95,51 @@ class User extends Authenticatable
         return $conversation;
     }
 
+    /**
+     * Get all subscriptions for this user.
+     */
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class);
+    }
+
+    /**
+     * Get the current active subscription.
+     */
+    public function activeSubscription(): ?Subscription
+    {
+        return $this->subscriptions()
+                     ->active()
+                     ->latest('starts_at')
+                     ->first();
+    }
+
+    /**
+     * Check if user has an active subscription for a given tier (or higher).
+     */
+    public function hasActiveTier(string $tier): bool
+    {
+        $tierHierarchy = ['free' => 0, 'obsidian_pro' => 1, 'elite_digital' => 2];
+
+        $currentLevel = $tierHierarchy[$this->subscription_tier ?? 'free'] ?? 0;
+        $requiredLevel = $tierHierarchy[$tier] ?? 0;
+
+        return $currentLevel >= $requiredLevel;
+    }
+
+    /**
+     * Check if user can use AI translation (quota check for free tier).
+     */
+    public function canUseAiTranslation(): bool
+    {
+        if ($this->hasActiveTier('obsidian_pro')) {
+            return true; // Pro and Elite have unlimited translations
+        }
+
+        // Free tier: max 5,000 words/month
+        return ($this->ai_words_translated_count ?? 0) < 5000;
+    }
+
     protected function casts(): array
     {
         return [

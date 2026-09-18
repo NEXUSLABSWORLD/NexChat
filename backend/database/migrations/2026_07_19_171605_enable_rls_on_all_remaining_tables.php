@@ -29,13 +29,16 @@ return new class extends Migration
             'ai_saved_phrases',
         ];
 
-        foreach ($tables as $table) {
-            if (Schema::hasTable($table)) {
-                DB::statement("ALTER TABLE public.{$table} ENABLE ROW LEVEL SECURITY;");
-                DB::statement("DROP POLICY IF EXISTS authenticated_access ON public.{$table};");
-                DB::statement("CREATE POLICY authenticated_access ON public.{$table} FOR ALL TO authenticated USING (true);");
+        if (DB::getDriverName() === 'pgsql') {
+            foreach ($tables as $table) {
+                if (Schema::hasTable($table)) {
+                    DB::statement("ALTER TABLE public.{$table} ENABLE ROW LEVEL SECURITY;");
+                    DB::statement("DROP POLICY IF EXISTS authenticated_access ON public.{$table};");
+                    DB::statement("CREATE POLICY authenticated_access ON public.{$table} FOR ALL TO authenticated USING (true);");
+                }
             }
         }
+
     }
 
     /**

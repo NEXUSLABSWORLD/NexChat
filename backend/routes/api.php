@@ -7,6 +7,7 @@ use App\Http\Controllers\MessageController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\AiFeatureController;
+use App\Http\Controllers\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -20,6 +21,15 @@ Route::prefix('auth')->group(function () {
     Route::post('/register', [RegisterController::class, 'register']);
     Route::post('/login', [LoginController::class, 'login']);
     Route::post('/login/verify', [LoginController::class, 'verifyLogin']);
+});
+
+// NotchPay Webhook (public, secured via HMAC signature)
+Route::post('/webhooks/notchpay', [SubscriptionController::class, 'webhook']);
+
+// Public Subscription routes (guest checkout initialization + callback verification)
+Route::prefix('subscription')->group(function () {
+    Route::post('/initialize-public', [SubscriptionController::class, 'initializePublic']);
+    Route::get('/verify', [SubscriptionController::class, 'verify']);
 });
 
 // Protected routes (Sanctum authentication required)
@@ -107,5 +117,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/saved-phrases', [AiFeatureController::class, 'savePhrase']);
         Route::delete('/saved-phrases/{id}', [AiFeatureController::class, 'deletePhrase']);
         Route::put('/config', [AiFeatureController::class, 'updateConfig']);
+    });
+
+    // Subscriptions / Payment (authenticated)
+    Route::prefix('subscription')->group(function () {
+        Route::post('/initialize', [SubscriptionController::class, 'initialize']);
+        Route::get('/status', [SubscriptionController::class, 'status']);
     });
 });
