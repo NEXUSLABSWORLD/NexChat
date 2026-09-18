@@ -47,6 +47,11 @@ return [
         'url' => env('DEEPL_API_URL'),
     ],
 
+    'groq' => [
+        'key' => env('GROQ_API_KEY'),
+        'model' => env('GROQ_TRANSCRIPTION_MODEL', 'whisper-large-v3-turbo'),
+    ],
+
     'gemini' => [
         'key' => env('GEMINI_API_KEY'),
     ],

@@ -109,6 +109,36 @@ class MessageController extends Controller
                 }
             }
 
+            if (
+                str_starts_with((string) $message->file_type, 'audio/')
+                && !$message->content_original
+            ) {
+                $transcript = app(\App\Services\GroqTranscriptionService::class)->transcribe(
+                    $message->file_url,
+                    $message->file_name,
+                    $sourceLang,
+                );
+
+                if ($transcript) {
+                    $message->update(['content_original' => $transcript]);
+
+                    if ($sourceLang !== $targetLang && $user->canUseAiTranslation()) {
+                        $translated = app(\App\Services\TranslationService::class)
+                            ->translate($transcript, $targetLang, $sourceLang);
+                        if ($translated) {
+                            $message->update(['content_translated' => $translated['text']]);
+                            $user->increment('ai_words_translated_count', str_word_count($transcript));
+                        }
+                    }
+
+                    try {
+                        broadcast(new MessageSent($message->fresh(), $conversation->id));
+                    } catch (\Throwable $broadcastErr) {
+                        \Illuminate\Support\Facades\Log::warning('Voice update broadcast failed: ' . $broadcastErr->getMessage());
+                    }
+                }
+            }
+
             return response()->json([
                 'message' => 'Message sent successfully',
                 'data' => $message

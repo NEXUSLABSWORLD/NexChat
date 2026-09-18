@@ -10,7 +10,7 @@ const BUCKET = 'nexchat-media'
  * @returns {{ file_url: string, file_name: string, file_type: string, file_size: number }}
  */
 export async function uploadFile(file, userId, onProgress = () => {}) {
-  const ext = file.name.split('.').pop()
+  const ext = file.name.split('.').pop() || 'bin'
   const uniqueName = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
   const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${uniqueName}`
 

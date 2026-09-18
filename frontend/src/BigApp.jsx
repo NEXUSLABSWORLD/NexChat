@@ -27,6 +27,8 @@ import {
   Cpu,
   EyeOff,
   MessageSquare,
+  Mic,
+  Square,
   UserPlus,
   Shield,
   ShieldAlert,
@@ -55,6 +57,7 @@ import Navbar from './components/Navbar'
 import ConversationList from './components/ConversationList'
 import CallPanel from './components/CallPanel'
 import { getEcho, disconnectEcho } from './api/echo'
+import { uploadFile } from './api/storage'
 
 import apiClient, { clearSession, getStoredToken, getStoredUser, storeSession } from './api/client'
 import { initializeSubscription } from './api/subscription'
@@ -258,6 +261,9 @@ function App() {
   const fileInputRef = useRef(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isUploading, setIsUploading] = useState(false)
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false)
+  const voiceMessageRecorderRef = useRef(null)
+  const voiceMessageChunksRef = useRef([])
 
   const activeConversation = conversationList.find((c) => c.id === activeConversationId) || null
   const activeGroup = groups.find((g) => g.id === activeGroupId) || null
@@ -1191,6 +1197,62 @@ function App() {
         is_read: false,
         created_at: new Date().toISOString(),
         ...fileData,
+      }
+
+      const handleVoiceRecording = async () => {
+        if (isRecordingVoice) {
+          voiceMessageRecorderRef.current?.stop()
+          return
+        }
+
+        if (!activeConversationId || isUploading || sendingMessage) return
+        if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+          alert('Les messages vocaux ne sont pas pris en charge par ce navigateur.')
+          return
+        }
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+          const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : 'audio/webm'
+          const recorder = new MediaRecorder(stream, { mimeType })
+          voiceMessageChunksRef.current = []
+          voiceMessageRecorderRef.current = recorder
+          recorder.ondataavailable = (event) => {
+            if (event.data.size > 0) voiceMessageChunksRef.current.push(event.data)
+          }
+          recorder.onstop = async () => {
+            stream.getTracks().forEach((track) => track.stop())
+            setIsRecordingVoice(false)
+            const blob = new Blob(voiceMessageChunksRef.current, { type: mimeType })
+            if (!blob.size) return
+
+            setIsUploading(true)
+            setUploadProgress(0)
+            try {
+              const file = new File([blob], `voice-${Date.now()}.webm`, { type: mimeType })
+              const fileData = await uploadFile(file, profile.id, (pct) => setUploadProgress(pct))
+              const response = await apiSendMessage(activeConversationId, null, fileData)
+              const data = response.data
+              setMessages((prev) => prev.some((message) => message.id === data.id) ? prev : [...prev, data])
+              setConversationList((prev) => prev.map((conversation) =>
+                conversation.id === activeConversationId
+                  ? { ...conversation, latest_message: data, last_message_at: data.created_at }
+                  : conversation,
+              ))
+            } catch (error) {
+              alert(`Erreur lors de l'envoi vocal : ${error.message}`)
+            } finally {
+              setIsUploading(false)
+              setUploadProgress(0)
+            }
+          }
+          recorder.start()
+          setIsRecordingVoice(true)
+        } catch (error) {
+          alert(`Accès au microphone refusé : ${error.message}`)
+        }
       }
       setMessages((prev) => [...prev, optimisticMsg])
 
@@ -2326,7 +2388,16 @@ function App() {
                     {/* Media rendering */}
                     {message.file_url && !isDeleted && (
                      <div style={{ marginBottom: message.content_original ? '8px' : '0' }}>
-                        {isImage(message.file_type) ? (
+                        {message.file_type?.startsWith('audio/') ? (
+                          <div style={{ minWidth: '220px' }}>
+                            <audio src={message.file_url} controls style={{ width: '100%', maxWidth: '280px' }} />
+                            {!message.content_original && (
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '5px' }}>
+                                Transcription en cours...
+                              </div>
+                            )}
+                          </div>
+                        ) : isImage(message.file_type) ? (
                           <div style={{ position: 'relative', display: 'inline-block' }}>
                             <img
                               src={message.file_url}
@@ -2546,6 +2617,25 @@ function App() {
                   >
                     <Paperclip size={20} />
                   </button>
+                  {activeConversationId && (
+                    <button
+                      type="button"
+                      onClick={handleVoiceRecording}
+                      disabled={isUploading || sendingMessage}
+                      style={{
+                        background: isRecordingVoice ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
+                        border: 'none',
+                        color: isRecordingVoice ? '#ef4444' : 'var(--text-secondary)',
+                        cursor: isUploading || sendingMessage ? 'not-allowed' : 'pointer',
+                        padding: '0',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                      title={isRecordingVoice ? 'Arrêter l’enregistrement' : 'Enregistrer un message vocal'}
+                    >
+                      {isRecordingVoice ? <Square size={20} fill="currentColor" /> : <Mic size={20} />}
+                    </button>
+                  )}
                   {draft.trim() ? (
                     <button
                       type="submit"
