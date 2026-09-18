@@ -25,6 +25,7 @@ class ProfileController extends Controller
                 'bio' => $user->bio,
                 'is_online' => $user->is_online,
                 'last_seen_at' => $user->last_seen_at,
+                'subscription_tier' => $user->subscription_tier ?? 'free',
                 'created_at' => $user->created_at,
             ]
         ]);

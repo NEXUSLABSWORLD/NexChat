@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { verifySubscription } from '../api/subscription'
+import { getProfile } from '../api/profile'
 import { getStoredUser, storeSession, getStoredToken } from '../api/client'
 import './PaymentCallback.css'
 
@@ -26,12 +27,13 @@ export default function PaymentCallback({ onComplete }) {
           setStatus('success')
           setTierName(result.tier === 'elite_digital' ? 'Elite Digital 👑' : 'Obsidian Pro ✨')
 
-          // Update stored user in localStorage
-          const currentUser = getStoredUser()
           const token = getStoredToken()
-          if (currentUser) {
-            currentUser.subscription_tier = result.tier
-            storeSession({ token, user: currentUser })
+          const currentUser = getStoredUser()
+          if (token && currentUser) {
+            const refreshedUser = await getProfile()
+            storeSession({ token, user: { ...currentUser, ...refreshedUser, subscription_tier: result.tier } })
+          } else if (currentUser) {
+            storeSession({ token, user: { ...currentUser, subscription_tier: result.tier } })
           }
         } else {
           setStatus('failed')
