@@ -1,0 +1,7 @@
+{
+  "name": "NexChat",
+  "description": "Real-time multilingual messaging app featuring instant translation, AI writing assistant, voice calls, stories, and encrypted channels.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
