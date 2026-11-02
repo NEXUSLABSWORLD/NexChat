@@ -1,0 +1,152 @@
+<?php
+
+namespace App\Models;
+
+use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+
+#[Fillable(['username', 'email', 'password_hash', 'primary_language_code', 'is_online', 'last_seen_at', 'login_token', 'login_token_expires_at', 'email_verified_at', 'avatar_url', 'bio', 'ai_proactive_translation', 'ai_translation_formality', 'ai_words_translated_count', 'subscription_tier'])]
+#[Hidden(['password_hash', 'remember_token', 'login_token'])]
+class User extends Authenticatable
+{
+    /** @use HasFactory<UserFactory> */
+    use HasFactory, HasApiTokens, Notifiable;
+
+    /**
+     * Sanctum uses getAuthPassword() to verify passwords.
+     * Our schema stores passwords in 'password_hash' instead of 'password'.
+     */
+    public function getAuthPassword(): string
+    {
+        return $this->password_hash;
+    }
+
+    /**
+     * Get conversations where user is participant
+     */
+    public function conversations(): HasMany
+    {
+        return $this->hasMany(Conversation::class, 'user_one_id')
+                    ->orWhere('user_two_id', $this->id);
+    }
+
+    /**
+     * Get messages sent by user
+     */
+    public function sentMessages(): HasMany
+    {
+        return $this->hasMany(Message::class, 'sender_id');
+    }
+
+    /**
+     * Get saved AI phrases
+     */
+    public function aiSavedPhrases(): HasMany
+    {
+        return $this->hasMany(AiSavedPhrase::class, 'user_id');
+    }
+
+    /**
+     * Get all conversations for this user (both as user_one and user_two)
+     */
+    public function getAllConversations()
+    {
+        return Conversation::where('user_one_id', $this->id)
+                          ->orWhere('user_two_id', $this->id)
+                          ->orderBy('last_message_at', 'desc');
+    }
+
+    /**
+     * Get conversation with another user
+     */
+    public function getConversationWith(int $otherUserId): ?Conversation
+    {
+        return Conversation::where(function ($query) use ($otherUserId) {
+                            $query->where('user_one_id', $this->id)
+                                  ->where('user_two_id', $otherUserId);
+                        })
+                        ->orWhere(function ($query) use ($otherUserId) {
+                            $query->where('user_one_id', $otherUserId)
+                                  ->where('user_two_id', $this->id);
+                        })
+                        ->first();
+    }
+
+    /**
+     * Start or get conversation with another user
+     */
+    public function startConversationWith(int $otherUserId): Conversation
+    {
+        $conversation = $this->getConversationWith($otherUserId);
+        
+        if (!$conversation) {
+            $conversation = Conversation::create([
+                'user_one_id' => $this->id,
+                'user_two_id' => $otherUserId,
+            ]);
+        }
+        
+        return $conversation;
+    }
+
+    /**
+     * Get all subscriptions for this user.
+     */
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class);
+    }
+
+    /**
+     * Get the current active subscription.
+     */
+    public function activeSubscription(): ?Subscription
+    {
+        return $this->subscriptions()
+                     ->active()
+                     ->latest('starts_at')
+                     ->first();
+    }
+
+    /**
+     * Check if user has an active subscription for a given tier (or higher).
+     */
+    public function hasActiveTier(string $tier): bool
+    {
+        $tierHierarchy = ['free' => 0, 'obsidian_pro' => 1, 'elite_digital' => 2];
+
+        $currentLevel = $tierHierarchy[$this->subscription_tier ?? 'free'] ?? 0;
+        $requiredLevel = $tierHierarchy[$tier] ?? 0;
+
+        return $currentLevel >= $requiredLevel;
+    }
+
+    /**
+     * Check if user can use AI translation (quota check for free tier).
+     */
+    public function canUseAiTranslation(): bool
+    {
+        if ($this->hasActiveTier('obsidian_pro')) {
+            return true; // Pro and Elite have unlimited translations
+        }
+
+        // Free tier: max 5,000 words/month
+        return ($this->ai_words_translated_count ?? 0) < 5000;
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'is_online' => 'boolean',
+            'last_seen_at' => 'datetime',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+        ];
+    }
+}

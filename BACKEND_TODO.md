@@ -1,11 +1,11 @@
-# ✅ Backend Roadmap & Suivi d'Avancement - NexChat (Laravel 11)
+# ✅ Backend Roadmap & Suivi d'Avancement - NexChat (Laravel 13)
 
 Ce document récapitule l'ensemble des modules du backend NexChat, de l'infrastructure initiale à la passerelle de paiement et la sécurité.
 
 ---
 
 ## 🛠️ Phase 1 : Setup & Infrastructure
-- [X] Initialiser le projet Laravel 11 (`composer create-project laravel/laravel .`)
+- [X] Initialiser le projet Laravel 13 (`composer create-project laravel/laravel .`)
 - [X] Configurer l'environnement `.env` (PostgreSQL Supabase, App Key, Mailer)
 - [X] Installer les dépendances clés : `laravel/sanctum`, `laravel/reverb`, `guzzlehttp/guzzle`
 - [X] Configuration de l'environnement d'exécution PHP 8.4 avec extensions (`pdo_pgsql`, `openssl`, `curl`, `mbstring`)
