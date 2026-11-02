@@ -7,7 +7,7 @@ Ce document détaille l'organisation technique, les flux de données et les pipe
 ## 1. 🛰️ Pipeline de Messagerie Temps Réel (Traduction Anticipée)
 
 ```
-[Utilisateur A] --(POST /api/messages)--> [Laravel 11 Backend]
+[Utilisateur A] --(POST /api/messages)--> [Laravel 13 Backend]
                                                 │
                                                 ├─► Détection Langue Source (ex: Anglais)
                                                 ├─► Récupération Langue Cible Destinataire (ex: Français)
